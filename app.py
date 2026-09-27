@@ -1,8 +1,14 @@
 import base64
+import json
+import os
 import streamlit as st
 from collections import defaultdict
 from parser import parse_pdf
 from checks import run_day_checks, check_cross_gang_duplicates
+
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+with open(CONFIG_PATH) as _f:
+    _config = json.load(_f)
 
 st.set_page_config(page_title="SheetCheck", layout="wide", page_icon="🟠")
 
@@ -221,6 +227,39 @@ st.markdown(f"""
         padding: 16px 18px !important;
     }}
 
+    /* ── Info popover button (fixed top-right) ───── */
+    div[data-testid="stPopover"] {{
+        position: fixed !important;
+        top: 14px !important;
+        right: 20px !important;
+        z-index: 99999 !important;
+    }}
+    div[data-testid="stPopover"] button {{
+        background: rgba(20,23,38,0.9) !important;
+        border: 1px solid #2a2d40 !important;
+        border-radius: 8px !important;
+        color: #e2e8f0 !important;
+        font-size: 1rem !important;
+        padding: 6px 12px !important;
+        backdrop-filter: blur(8px);
+        cursor: pointer;
+    }}
+    div[data-testid="stPopover"] button:hover {{
+        border-color: #f59e0b !important;
+        color: #f59e0b !important;
+    }}
+    /* Popover body */
+    div[data-testid="stPopoverBody"] {{
+        background: #141726 !important;
+        border: 1px solid #1d2035 !important;
+        border-radius: 14px !important;
+        padding: 0 !important;
+        min-width: 340px !important;
+        max-height: 80vh !important;
+        overflow-y: auto !important;
+        box-shadow: 0 24px 64px rgba(0,0,0,0.6) !important;
+    }}
+
     /* ── Issue cards ─────────────────────────────── */
     .issue-error {{
         background: rgba(239,68,68,0.07);
@@ -298,6 +337,36 @@ def badge(issues):
         parts.append(f"⚠️ {len(warnings)} warning{'s' if len(warnings) > 1 else ''}")
     return "  ".join(parts)
 
+
+# ── Info popover (fixed top-right) ───────────────────────────────────────────
+with st.popover("☰"):
+    st.markdown("### SheetCheck — Configuration")
+
+    st.markdown("---")
+    st.markdown("**Prelim Operatives** — appear on all 3 gangs, not flagged as duplicates")
+    for name, info in _config.get("prelim_operatives", {}).items():
+        st.markdown(f"- **{name}** — {info.get('note', '')}")
+
+    st.markdown("---")
+    st.markdown("**Labour Roster**")
+    for op in _config.get("known_operatives", []):
+        st.markdown(f"- {op['name']} — *{op['trade']}*")
+
+    st.markdown("---")
+    st.markdown("**Prelim Plant** — appear on all 3 gangs, not flagged as duplicates")
+    for p in _config.get("prelim_plant", []):
+        st.markdown(f"- {p}")
+
+    st.markdown("---")
+    st.markdown("**Required Plant** — must appear on every gang every day")
+    for grp in _config.get("required_plant_groups", []):
+        variants = " / ".join(grp["variants"])
+        st.markdown(f"- **{grp['label']}** — {variants}")
+
+    st.markdown("---")
+    st.markdown("**Known Plant List**")
+    for p in _config.get("known_plant", []):
+        st.markdown(f"- {p}")
 
 # ── Hero ─────────────────────────────────────────────────────────────────────
 st.markdown(f"""
