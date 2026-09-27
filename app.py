@@ -12,7 +12,7 @@ st.markdown("""
     .sc-logo   { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; color: #f59e0b; }
     .sc-tag    { font-size: 0.95rem; color: #94a3b8; margin-top: 0.25rem; }
 
-    /* Upload section */
+    /* Upload section label */
     .sc-upload-title {
         font-size: 0.7rem;
         font-weight: 700;
@@ -20,6 +20,38 @@ st.markdown("""
         text-transform: uppercase;
         color: #f59e0b;
         margin-bottom: 0.5rem;
+    }
+
+    /* Expand the drop zone to fill the card */
+    [data-testid="stFileUploaderDropzone"] {
+        min-height: 160px !important;
+        border: 2px dashed #f59e0b !important;
+        border-radius: 10px !important;
+        background: #1c1f2e !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        transition: background 0.15s ease;
+    }
+    [data-testid="stFileUploaderDropzone"]:hover {
+        background: #252840 !important;
+    }
+    /* Hide the small Upload button — whole card is clickable */
+    [data-testid="stFileUploaderDropzone"] button {
+        display: none !important;
+    }
+    /* Style the drag-and-drop instruction text */
+    [data-testid="stFileUploaderDropzoneInstructions"] {
+        text-align: center;
+    }
+    [data-testid="stFileUploaderDropzoneInstructions"] span {
+        font-size: 0.85rem !important;
+        color: #94a3b8 !important;
+    }
+    [data-testid="stFileUploaderDropzoneInstructions"] small {
+        color: #64748b !important;
     }
 
     /* Tighten Streamlit default padding */
