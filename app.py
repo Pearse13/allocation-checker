@@ -231,7 +231,7 @@ st.markdown(f"""
     div[data-testid="stPopover"] {{
         position: fixed !important;
         top: 14px !important;
-        right: 20px !important;
+        left: 20px !important;
         z-index: 99999 !important;
     }}
     div[data-testid="stPopover"] button {{
@@ -340,33 +340,27 @@ def badge(issues):
 
 # ── Info popover (fixed top-right) ───────────────────────────────────────────
 with st.popover("☰"):
-    st.markdown("### SheetCheck — Configuration")
+    st.markdown('<p style="font-size:0.65rem;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#f59e0b;margin:0 0 16px">Configuration</p>', unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.markdown("**Prelim Operatives** — appear on all 3 gangs, not flagged as duplicates")
-    for name, info in _config.get("prelim_operatives", {}).items():
-        st.markdown(f"- **{name}** — {info.get('note', '')}")
+    with st.expander(f"Prelim Operatives  ·  {len(_config.get('prelim_operatives', {}))}"):
+        for name in _config.get("prelim_operatives", {}):
+            st.markdown(f"- {name}")
 
-    st.markdown("---")
-    st.markdown("**Labour Roster**")
-    for op in _config.get("known_operatives", []):
-        st.markdown(f"- {op['name']} — *{op['trade']}*")
+    with st.expander(f"Labour Roster  ·  {len(_config.get('known_operatives', []))}"):
+        for op in _config.get("known_operatives", []):
+            st.markdown(f"- **{op['name']}** — {op['trade']}")
 
-    st.markdown("---")
-    st.markdown("**Prelim Plant** — appear on all 3 gangs, not flagged as duplicates")
-    for p in _config.get("prelim_plant", []):
-        st.markdown(f"- {p}")
+    with st.expander(f"Prelim Plant  ·  {len(_config.get('prelim_plant', []))}"):
+        for p in _config.get("prelim_plant", []):
+            st.markdown(f"- {p}")
 
-    st.markdown("---")
-    st.markdown("**Required Plant** — must appear on every gang every day")
-    for grp in _config.get("required_plant_groups", []):
-        variants = " / ".join(grp["variants"])
-        st.markdown(f"- **{grp['label']}** — {variants}")
+    with st.expander(f"Required Plant  ·  {len(_config.get('required_plant_groups', []))}"):
+        for grp in _config.get("required_plant_groups", []):
+            st.markdown(f"- **{grp['label']}** — {' / '.join(grp['variants'])}")
 
-    st.markdown("---")
-    st.markdown("**Known Plant List**")
-    for p in _config.get("known_plant", []):
-        st.markdown(f"- {p}")
+    with st.expander(f"Known Plant  ·  {len(_config.get('known_plant', []))}"):
+        for p in _config.get("known_plant", []):
+            st.markdown(f"- {p}")
 
 # ── Hero ─────────────────────────────────────────────────────────────────────
 st.markdown(f"""
