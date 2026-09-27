@@ -320,24 +320,6 @@ def check_duplicates_within_sheet(day_data):
     return issues
 
 
-def check_trade_capitalisation(day_data):
-    """Flag trade names that don't start with a capital letter."""
-    issues = []
-    label = f"{day_data.get('day', '?')} {day_data.get('date_str', '')}"
-    gang = day_data.get("gang")
-
-    for entry in day_data.get("labour", []):
-        trade = entry.get("trade", "")
-        if trade and trade[0].islower():
-            issues.append(_issue(
-                "warning", "formatting",
-                f"Labour — {entry['name']}: trade '{trade}' starts with a lowercase letter. "
-                f"Check consistency (e.g. 'Pipe layer' vs 'pipe layer').",
-                day=label, gang=gang
-            ))
-
-    return issues
-
 
 def check_formatting(day_data):
     """Flag blank entries and obvious formatting problems."""
@@ -398,7 +380,6 @@ def run_day_checks(day_data):
     issues += check_required_plant(day_data)
     issues += check_duplicates_within_sheet(day_data)
     issues += check_formatting(day_data)
-    issues += check_trade_capitalisation(day_data)
     return issues
 
 
