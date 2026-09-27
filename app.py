@@ -3,36 +3,95 @@ from collections import defaultdict
 from parser import parse_pdf
 from checks import run_day_checks, check_cross_gang_duplicates
 
-st.set_page_config(page_title="Allocation Checker", layout="wide", page_icon="📋")
+st.set_page_config(page_title="SheetCheck", layout="wide", page_icon="🟠")
 
 st.markdown("""
 <style>
+    /* Header */
+    .sc-header { padding: 2rem 0 1rem 0; }
+    .sc-logo   { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; color: #f59e0b; }
+    .sc-tag    { font-size: 0.95rem; color: #94a3b8; margin-top: 0.25rem; }
+
+    /* Upload card */
+    .sc-upload-card {
+        background: #1c1f2e;
+        border: 1px solid #2d3148;
+        border-radius: 12px;
+        padding: 1.75rem 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .sc-upload-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #f59e0b;
+        margin-bottom: 1rem;
+    }
+
+    /* Summary metrics */
+    .sc-summary {
+        display: flex;
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+    .sc-metric {
+        background: #1c1f2e;
+        border: 1px solid #2d3148;
+        border-radius: 10px;
+        padding: 1rem 1.5rem;
+        flex: 1;
+    }
+    .sc-metric-val  { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .sc-metric-lbl  { font-size: 0.75rem; color: #94a3b8; margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.07em; }
+    .sc-red    { color: #ef4444; }
+    .sc-amber  { color: #f59e0b; }
+    .sc-green  { color: #22c55e; }
+
+    /* Gang header */
+    .sc-gang-header {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #f59e0b;
+        border-bottom: 1px solid #2d3148;
+        padding-bottom: 0.5rem;
+        margin: 1.5rem 0 0.75rem 0;
+    }
+
+    /* Issue cards */
     .issue-error {
-        background: #ffeaea;
-        border-left: 4px solid #d63031;
+        background: #2d1515;
+        border-left: 3px solid #ef4444;
         padding: 10px 14px;
-        border-radius: 4px;
+        border-radius: 6px;
         margin-bottom: 6px;
-        font-size: 0.92rem;
-        color: #1a1a1a;
+        font-size: 0.88rem;
+        color: #fca5a5;
     }
     .issue-warning {
-        background: #fff3cd;
-        border-left: 4px solid #d4860a;
+        background: #2d2010;
+        border-left: 3px solid #f59e0b;
         padding: 10px 14px;
-        border-radius: 4px;
+        border-radius: 6px;
         margin-bottom: 6px;
-        font-size: 0.92rem;
-        color: #1a1a1a;
+        font-size: 0.88rem;
+        color: #fcd34d;
     }
     .issue-label {
-        font-weight: 600;
+        font-weight: 700;
         text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-        margin-bottom: 2px;
-        color: #1a1a1a;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        margin-bottom: 4px;
+        opacity: 0.7;
     }
+
+    /* Hide default Streamlit branding */
+    #MainMenu { visibility: hidden; }
+    footer     { visibility: hidden; }
+    header     { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,7 +136,7 @@ def issue_badge(issues):
     errors   = [i for i in issues if i["severity"] == "error"]
     warnings = [i for i in issues if i["severity"] == "warning"]
     if not issues:
-        return "✅ All clear"
+        return "✅ Clear"
     parts = []
     if errors:
         parts.append(f"❌ {len(errors)} error{'s' if len(errors) > 1 else ''}")
@@ -87,35 +146,48 @@ def issue_badge(issues):
 
 
 # ---------------------------------------------------------------------------
-# Layout
+# Header
 # ---------------------------------------------------------------------------
-st.title("📋 Allocation Sheet Checker")
-st.caption("Upload 1–3 gang PDFs. Each PDF can cover a full week (multiple pages).")
-st.divider()
+st.markdown("""
+<div class="sc-header">
+    <div class="sc-logo">SheetCheck</div>
+    <div class="sc-tag">Catches errors in your daily allocation sheets before they're signed off.</div>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Upload
+# ---------------------------------------------------------------------------
+st.markdown('<div class="sc-upload-card"><div class="sc-upload-title">Upload Gang PDFs — up to 3 gangs, one PDF each</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 uploads = {}
 with col1:
-    f = st.file_uploader("Gang 1", type="pdf", key="gang1")
+    f = st.file_uploader("Gang 1", type="pdf", key="gang1", label_visibility="collapsed")
     if f:
         uploads["Gang 1"] = f
+        st.caption("Gang 1")
 with col2:
-    f = st.file_uploader("Gang 2", type="pdf", key="gang2")
+    f = st.file_uploader("Gang 2", type="pdf", key="gang2", label_visibility="collapsed")
     if f:
         uploads["Gang 2"] = f
+        st.caption("Gang 2")
 with col3:
-    f = st.file_uploader("Gang 3", type="pdf", key="gang3")
+    f = st.file_uploader("Gang 3", type="pdf", key="gang3", label_visibility="collapsed")
     if f:
         uploads["Gang 3"] = f
+        st.caption("Gang 3")
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 if not uploads:
     st.stop()
 
-if not st.button("Run Checks", type="primary"):
+if not st.button("Run Checks →", type="primary", use_container_width=False):
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Parse all PDFs
+# Parse
 # ---------------------------------------------------------------------------
 all_parsed = {}
 with st.spinner("Reading PDFs…"):
@@ -123,13 +195,12 @@ with st.spinner("Reading PDFs…"):
         all_parsed[gang_label] = parse_pdf(pdf_file)
 
 # ---------------------------------------------------------------------------
-# Run all checks once — store results alongside day data
+# Run all checks once
 # ---------------------------------------------------------------------------
-all_results = {}  # gang_label -> list of (day_data, issues)
+all_results = {}
 for gang_label, days in all_parsed.items():
     all_results[gang_label] = [(d, run_day_checks(d)) for d in days]
 
-# Cross-gang checks
 days_by_date = defaultdict(list)
 for gang_label, days in all_parsed.items():
     for day_data in days:
@@ -142,29 +213,50 @@ if len(all_parsed) > 1:
         if len(gang_days) > 1:
             cross_issues += check_cross_gang_duplicates(gang_days)
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
 all_issues_flat = [i for results in all_results.values() for _, issues in results for i in issues] + cross_issues
 total_errors   = sum(1 for i in all_issues_flat if i["severity"] == "error")
 total_warnings = sum(1 for i in all_issues_flat if i["severity"] == "warning")
 total_days     = sum(len(r) for r in all_results.values())
 
-st.divider()
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+st.markdown('<div class="sc-summary">', unsafe_allow_html=True)
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    colour = "sc-red" if total_errors else "sc-green"
+    st.markdown(f"""
+    <div class="sc-metric">
+        <div class="sc-metric-val {colour}">{total_errors}</div>
+        <div class="sc-metric-lbl">Errors</div>
+    </div>""", unsafe_allow_html=True)
+
+with c2:
+    colour = "sc-amber" if total_warnings else "sc-green"
+    st.markdown(f"""
+    <div class="sc-metric">
+        <div class="sc-metric-val {colour}">{total_warnings}</div>
+        <div class="sc-metric-lbl">Warnings</div>
+    </div>""", unsafe_allow_html=True)
+
+with c3:
+    st.markdown(f"""
+    <div class="sc-metric">
+        <div class="sc-metric-val" style="color:#e2e8f0">{total_days}</div>
+        <div class="sc-metric-lbl">{len(uploads)} Gang{'s' if len(uploads) > 1 else ''} · {total_days} Day{'s' if total_days > 1 else ''} checked</div>
+    </div>""", unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
 if total_errors == 0 and total_warnings == 0:
-    st.success(f"### ✅ All checks passed — {len(uploads)} gang{'s' if len(uploads) > 1 else ''}, {total_days} day{'s' if total_days > 1 else ''}")
-else:
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Errors",   total_errors)
-    c2.metric("Warnings", total_warnings)
-    c3.metric("Sheets checked", f"{len(uploads)} gang{'s' if len(uploads) > 1 else ''} · {total_days} day{'s' if total_days > 1 else ''}")
+    st.success("All checks passed across every sheet.")
 
 # ---------------------------------------------------------------------------
 # Per-gang results
 # ---------------------------------------------------------------------------
 for gang_label, results in all_results.items():
-    st.divider()
-    st.markdown(f"### {gang_label} — {uploads[gang_label].name}")
+    st.markdown(f'<div class="sc-gang-header">{gang_label} — {uploads[gang_label].name}</div>', unsafe_allow_html=True)
 
     for day_data, issues in results:
         errors   = [i for i in issues if i["severity"] == "error"]
@@ -173,7 +265,7 @@ for gang_label, results in all_results.items():
 
         with st.expander(label, expanded=bool(issues)):
             if not issues:
-                st.markdown("No issues found.")
+                st.markdown('<span style="color:#22c55e">No issues found.</span>', unsafe_allow_html=True)
             else:
                 for issue in errors:
                     render_issue(issue)
@@ -200,8 +292,7 @@ for gang_label, results in all_results.items():
 # Cross-gang results
 # ---------------------------------------------------------------------------
 if len(all_parsed) > 1:
-    st.divider()
-    st.markdown("### Cross-Gang Checks")
+    st.markdown('<div class="sc-gang-header">Cross-Gang Checks</div>', unsafe_allow_html=True)
     if not cross_issues:
         st.success("No cross-gang duplicates found.")
     else:
