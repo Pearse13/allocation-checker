@@ -14,14 +14,16 @@ st.markdown("""
         border-radius: 4px;
         margin-bottom: 6px;
         font-size: 0.92rem;
+        color: #1a1a1a;
     }
     .issue-warning {
-        background: #fff8e6;
-        border-left: 4px solid #e17055;
+        background: #fff3cd;
+        border-left: 4px solid #d4860a;
         padding: 10px 14px;
         border-radius: 4px;
         margin-bottom: 6px;
         font-size: 0.92rem;
+        color: #1a1a1a;
     }
     .issue-label {
         font-weight: 600;
@@ -29,6 +31,7 @@ st.markdown("""
         font-size: 0.75rem;
         letter-spacing: 0.05em;
         margin-bottom: 2px;
+        color: #1a1a1a;
     }
 </style>
 """, unsafe_allow_html=True)
