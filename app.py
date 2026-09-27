@@ -235,18 +235,28 @@ st.markdown(f"""
         z-index: 99999 !important;
     }}
     div[data-testid="stPopover"] button {{
-        background: rgba(20,23,38,0.9) !important;
-        border: 1px solid #2a2d40 !important;
-        border-radius: 8px !important;
-        color: #e2e8f0 !important;
-        font-size: 1rem !important;
-        padding: 6px 12px !important;
-        backdrop-filter: blur(8px);
-        cursor: pointer;
+        background: #141726 !important;
+        border: 1px solid #1d2035 !important;
+        border-radius: 6px !important;
+        color: #94a3b8 !important;
+        font-size: 0.85rem !important;
+        width: 36px !important;
+        height: 36px !important;
+        padding: 0 !important;
+        min-width: unset !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
     }}
     div[data-testid="stPopover"] button:hover {{
         border-color: #f59e0b !important;
         color: #f59e0b !important;
+        background: #1a1d2e !important;
+    }}
+    div[data-testid="stPopover"] button p {{
+        margin: 0 !important;
+        line-height: 1 !important;
     }}
     /* Popover body */
     div[data-testid="stPopoverBody"] {{
