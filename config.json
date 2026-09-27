@@ -1,0 +1,81 @@
+{
+  "expected_total_hours": 10.5,
+  "prelim_operatives": {
+    "Peter Giblin": {
+      "note": "Site management - appears on all 3 gangs, not a duplicate",
+      "expected_job_hours": { "1": 0.5, "2": 10.0 }
+    },
+    "Mick Kilcoyne": {
+      "note": "Site management - appears on all 3 gangs, not a duplicate",
+      "expected_job_hours": { "1": 0.5, "2": 10.0 }
+    }
+  },
+  "known_operatives": [
+    { "name": "Jason Dann",        "trade": "Pipe layer" },
+    { "name": "Wayne Beirne",      "trade": "Plant opp" },
+    { "name": "Gabrile Surlea",    "trade": "Pipe layer" },
+    { "name": "Matt Nicholls",     "trade": "Plant opp" },
+    { "name": "Michael Jr",        "trade": "Pipe layer" },
+    { "name": "Ahmed Amini",       "trade": "Lift supervisor" },
+    { "name": "Jack Haynes",       "trade": "pipe layer" },
+    { "name": "Luke Gallagher",    "trade": "plant op" },
+    { "name": "Shkelqim Domi",     "trade": "plant op" },
+    { "name": "Luke Spence",       "trade": "plant op" },
+    { "name": "Francis Wynne",     "trade": "Plant Op" },
+    { "name": "EBenezer Bediako",  "trade": "Lift Supervisor" },
+    { "name": "Marius Stancu",     "trade": "Plant Op" },
+    { "name": "James Spencer",     "trade": "pipe layer" },
+    { "name": "Gavin McCoy",       "trade": "Plant Op" },
+    { "name": "Jason McDonnell",   "trade": "Pipe layer" }
+  ],
+  "prelim_plant": [
+    "Ford Ranger",
+    "Micks MAN LWB"
+  ],
+  "known_plant": [
+    "CAT 50t Exc",
+    "Hitachi 210",
+    "Hitachi 375",
+    "Hitachi 490",
+    "Bell B30E",
+    "Volvo 30t ADT",
+    "30t CAT ADT",
+    "15t JCB Excavator",
+    "Ramax",
+    "Plate Compactor",
+    "Tractor and Trailer",
+    "Tractor and Tanker",
+    "Davit Arm System",
+    "2no Davit Arm System",
+    "2no Davit Arms",
+    "4 Leg Chains",
+    "Chains and Shackles",
+    "350 Stihl Saw",
+    "350mm Stihl Saw",
+    "Hand Tools",
+    "2\" Pump & Hoses",
+    "2\" Pump and Generator",
+    "Rotating Laser",
+    "Grade Laser",
+    "Generator",
+    "STANDARD TRENCH BOX 800-1200",
+    "7m Drag Box & Edge Protection",
+    "3.5m Trench boxes & Edge Protection",
+    "2.5m Manhole box & Edge Protection",
+    "4m Manhole Box & Edge Protection",
+    "2no. Ladder Access Platform",
+    "2no Manhole Shutters",
+    "Toyota Hilux",
+    "Vauxhall Crew Van",
+    "Transit Crew Van",
+    "Ford Transit Tipper",
+    "Joe VW Caddy",
+    "Peugot Crew Van",
+    "Poker"
+  ],
+  "required_plant_groups": [
+    { "label": "Hand Tools",  "variants": ["Hand Tools"] },
+    { "label": "Stihl Saw",   "variants": ["350 Stihl Saw", "350mm Stihl Saw"] },
+    { "label": "Chains",      "variants": ["4 Leg Chains", "Chains and Shackles"] }
+  ]
+}
