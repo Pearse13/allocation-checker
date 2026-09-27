@@ -12,21 +12,21 @@ st.markdown("""
     .sc-logo   { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; color: #f59e0b; }
     .sc-tag    { font-size: 0.95rem; color: #94a3b8; margin-top: 0.25rem; }
 
-    /* Upload card */
-    .sc-upload-card {
-        background: #1c1f2e;
-        border: 1px solid #2d3148;
-        border-radius: 12px;
-        padding: 1.75rem 2rem;
-        margin-bottom: 1.5rem;
-    }
+    /* Upload section */
     .sc-upload-title {
         font-size: 0.7rem;
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
         color: #f59e0b;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Tighten Streamlit default padding */
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 960px !important;
     }
 
     /* Summary metrics */
@@ -158,27 +158,22 @@ st.markdown("""
 # ---------------------------------------------------------------------------
 # Upload
 # ---------------------------------------------------------------------------
-st.markdown('<div class="sc-upload-card"><div class="sc-upload-title">Upload Gang PDFs — up to 3 gangs, one PDF each</div>', unsafe_allow_html=True)
+st.markdown('<div class="sc-upload-title">Upload gang PDFs — one per gang</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 uploads = {}
 with col1:
-    f = st.file_uploader("Gang 1", type="pdf", key="gang1", label_visibility="collapsed")
+    f = st.file_uploader("Gang 1", type="pdf", key="gang1")
     if f:
         uploads["Gang 1"] = f
-        st.caption("Gang 1")
 with col2:
-    f = st.file_uploader("Gang 2", type="pdf", key="gang2", label_visibility="collapsed")
+    f = st.file_uploader("Gang 2", type="pdf", key="gang2")
     if f:
         uploads["Gang 2"] = f
-        st.caption("Gang 2")
 with col3:
-    f = st.file_uploader("Gang 3", type="pdf", key="gang3", label_visibility="collapsed")
+    f = st.file_uploader("Gang 3", type="pdf", key="gang3")
     if f:
         uploads["Gang 3"] = f
-        st.caption("Gang 3")
-
-st.markdown('</div>', unsafe_allow_html=True)
 
 if not uploads:
     st.stop()
