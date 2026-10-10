@@ -21,7 +21,7 @@ Header rows:
 """
 import pdfplumber
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 JOB_COLS = list(range(3, 13))   # columns 3-12 = job hours 1-10
 TOTAL_COL = 13
@@ -204,6 +204,78 @@ def _parse_page(page):
         "job_descriptions": job_descriptions,
         "parse_error": None,
     }
+
+
+_DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def infer_missing_fields(days):
+    """
+    Fill in missing gang or date fields using context from other pages in the
+    same file.  Called once per uploaded file after parse_pdf().
+
+    Gang inference:
+      - Single-gang file  → any page missing a gang gets the file's gang.
+      - Combined file     → nearest neighbour by page index.
+
+    Date inference:
+      - If day name is present, find the nearest dated page in the file and
+        calculate the date from the day-name difference (e.g. if Mon=21/09
+        then Tue must be 22/09).
+    """
+    from collections import Counter
+
+    # ── Gang ──────────────────────────────────────────────────────────
+    known_gangs = {d["gang"] for d in days if d.get("gang")}
+
+    if len(known_gangs) == 1:
+        sole = next(iter(known_gangs))
+        for d in days:
+            if not d.get("gang"):
+                d["gang"] = sole
+                d["gang_inferred"] = True
+
+    elif len(known_gangs) > 1:
+        for i, d in enumerate(days):
+            if d.get("gang"):
+                continue
+            for offset in range(1, len(days)):
+                for j in (i - offset, i + offset):
+                    if 0 <= j < len(days) and days[j].get("gang"):
+                        d["gang"] = days[j]["gang"]
+                        d["gang_inferred"] = True
+                        break
+                if d.get("gang"):
+                    break
+
+    # ── Date ──────────────────────────────────────────────────────────
+    anchors = [
+        (i, d["date"], d.get("day"))
+        for i, d in enumerate(days)
+        if d.get("date") and not d.get("date_inferred")
+    ]
+
+    for i, d in enumerate(days):
+        if d.get("date"):
+            continue
+        target_day = d.get("day")
+        if not target_day or target_day not in _DAY_ORDER:
+            continue
+        if not anchors:
+            continue
+
+        # Nearest anchor by page index
+        _, ref_date, ref_day = min(anchors, key=lambda x: abs(x[0] - i))
+        if not ref_day or ref_day not in _DAY_ORDER:
+            continue
+
+        diff = _DAY_ORDER.index(target_day) - _DAY_ORDER.index(ref_day)
+        inferred = ref_date + timedelta(days=diff)
+        d["date"]          = inferred
+        d["date_str"]      = inferred.strftime("%d/%m/%Y")
+        d["date_inferred"] = True
+
+    return days
 
 
 def parse_pdf(pdf_file):

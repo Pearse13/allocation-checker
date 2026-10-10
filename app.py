@@ -3,7 +3,8 @@ import json
 import os
 import streamlit as st
 from collections import defaultdict
-from parser import parse_pdf
+from datetime import date as date_type
+from parser import parse_pdf, infer_missing_fields
 from checks import run_day_checks, check_cross_gang_duplicates
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
@@ -382,44 +383,53 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Upload ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="sc-label">Upload gang PDFs — one per gang</div>', unsafe_allow_html=True)
+st.markdown('<div class="sc-label">Upload PDFs — one per gang, or a single combined PDF</div>', unsafe_allow_html=True)
 
-c1, c2, c3 = st.columns(3)
-uploads = {}
-with c1:
-    f = st.file_uploader("Gang 1", type="pdf", key="gang1")
-    if f: uploads["Gang 1"] = f
-with c2:
-    f = st.file_uploader("Gang 2", type="pdf", key="gang2")
-    if f: uploads["Gang 2"] = f
-with c3:
-    f = st.file_uploader("Gang 3", type="pdf", key="gang3")
-    if f: uploads["Gang 3"] = f
+uploaded_files = st.file_uploader(
+    "Upload PDFs",
+    type="pdf",
+    accept_multiple_files=True,
+    label_visibility="collapsed",
+)
 
-run = st.button("Run Checks →", type="primary", disabled=not uploads)
+run = st.button("Run Checks →", type="primary", disabled=not uploaded_files)
 
-if not uploads or not run:
+if not uploaded_files or not run:
     st.stop()
 
-# ── Parse ─────────────────────────────────────────────────────────────────────
-all_parsed = {}
+# ── Parse — collect all pages, infer any missing gang/date from file context ──
+all_pages = []
 with st.spinner("Reading PDFs…"):
-    for gang_label, pdf_file in uploads.items():
-        all_parsed[gang_label] = parse_pdf(pdf_file)
+    for pdf_file in uploaded_files:
+        days = parse_pdf(pdf_file)
+        days = infer_missing_fields(days)
+        for d in days:
+            d["_source_file"] = pdf_file.name
+        all_pages.extend(days)
+
+# ── Group by gang (using gang field from page header, not uploader label) ─────
+pages_by_gang = defaultdict(list)
+for d in all_pages:
+    gang_key = f"Gang {d['gang']}" if d.get("gang") else "Gang ?"
+    pages_by_gang[gang_key].append(d)
+
+# Sort each gang's pages by date
+for gang_key in pages_by_gang:
+    pages_by_gang[gang_key].sort(key=lambda d: d.get("date") or date_type.max)
 
 # ── Run checks ────────────────────────────────────────────────────────────────
 all_results = {}
-for gang_label, days in all_parsed.items():
-    all_results[gang_label] = [(d, run_day_checks(d)) for d in days]
+for gang_key, days in pages_by_gang.items():
+    all_results[gang_key] = [(d, run_day_checks(d)) for d in days]
 
 days_by_date = defaultdict(list)
-for gang_label, days in all_parsed.items():
+for gang_key, days in pages_by_gang.items():
     for day_data in days:
         key = day_data.get("date_str") or f"page_{day_data.get('page')}"
-        days_by_date[key].append((gang_label, day_data))
+        days_by_date[key].append((gang_key, day_data))
 
 cross_issues = []
-if len(all_parsed) > 1:
+if len(pages_by_gang) > 1:
     for key, gang_days in days_by_date.items():
         if len(gang_days) > 1:
             cross_issues += check_cross_gang_duplicates(gang_days)
@@ -437,7 +447,7 @@ st.markdown('<div class="sc-label" style="margin-top:44px">Summary</div>', unsaf
 
 ec = "col-red"   if total_errors else "col-green"
 wc = "col-amber" if total_warns  else "col-green"
-gangs_str = f"{len(uploads)} gang{'s' if len(uploads) > 1 else ''}"
+gangs_str = f"{len(pages_by_gang)} gang{'s' if len(pages_by_gang) > 1 else ''}"
 days_str  = f"{total_days} day{'s' if total_days > 1 else ''}"
 
 st.markdown(f"""
@@ -461,8 +471,9 @@ if total_errors == 0 and total_warns == 0:
     st.success("All checks passed across every sheet.")
 
 # ── Per-gang results ──────────────────────────────────────────────────────────
-for gang_label, results in all_results.items():
-    fname = uploads[gang_label].name
+for gang_label, results in sorted(all_results.items()):
+    source_files = sorted({d.get("_source_file", "") for d, _ in results if d.get("_source_file")})
+    fname = ", ".join(source_files) if source_files else ""
     st.markdown(f"""
     <div class="sc-gang">
         <span class="sc-gang-name">{gang_label}</span>
@@ -501,7 +512,7 @@ for gang_label, results in all_results.items():
                                 st.markdown(f"- {e['name']} | {e['stated_total']}h")
 
 # ── Cross-gang ────────────────────────────────────────────────────────────────
-if len(all_parsed) > 1:
+if len(pages_by_gang) > 1:
     st.markdown("""
     <div class="sc-gang">
         <span class="sc-gang-name">Cross-Gang Checks</span>
