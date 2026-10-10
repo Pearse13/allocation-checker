@@ -383,14 +383,37 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Upload ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="sc-label">Upload PDFs — one per gang, or a single combined PDF</div>', unsafe_allow_html=True)
+st.markdown('<div class="sc-label">Upload PDFs</div>', unsafe_allow_html=True)
 
-uploaded_files = st.file_uploader(
-    "Upload PDFs",
-    type="pdf",
-    accept_multiple_files=True,
+upload_mode = st.radio(
+    "Upload mode",
+    ["By gang", "Combined PDF"],
+    horizontal=True,
     label_visibility="collapsed",
 )
+
+uploaded_files = []
+
+if upload_mode == "By gang":
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        f = st.file_uploader("Gang 1", type="pdf", key="gang1")
+        if f: uploaded_files.append(f)
+    with c2:
+        f = st.file_uploader("Gang 2", type="pdf", key="gang2")
+        if f: uploaded_files.append(f)
+    with c3:
+        f = st.file_uploader("Gang 3", type="pdf", key="gang3")
+        if f: uploaded_files.append(f)
+else:
+    files = st.file_uploader(
+        "Upload PDF",
+        type="pdf",
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
+    if files:
+        uploaded_files = files
 
 run = st.button("Run Checks →", type="primary", disabled=not uploaded_files)
 
