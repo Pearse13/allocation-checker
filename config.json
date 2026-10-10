@@ -73,6 +73,28 @@
     "Peugot Crew Van",
     "Poker"
   ],
+  "vehicle_plant": [
+    "CAT 50t Exc",
+    "Hitachi 210",
+    "Hitachi 375",
+    "Hitachi 490",
+    "Bell B30E",
+    "Volvo 30t ADT",
+    "30t CAT ADT",
+    "15t JCB Excavator",
+    "Ramax",
+    "Plate Compactor",
+    "Tractor and Trailer",
+    "Tractor and Tanker",
+    "Toyota Hilux",
+    "Vauxhall Crew Van",
+    "Transit Crew Van",
+    "Ford Transit Tipper",
+    "Joe VW Caddy",
+    "Peugot Crew Van",
+    "Ford Ranger",
+    "Micks MAN LWB"
+  ],
   "required_plant_groups": [
     { "label": "Hand Tools",  "variants": ["Hand Tools"] },
     { "label": "Stihl Saw",   "variants": ["350 Stihl Saw", "350mm Stihl Saw"] },

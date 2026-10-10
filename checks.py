@@ -394,12 +394,13 @@ def check_cross_gang_duplicates(all_gang_days):
     appear on all gangs.
     """
     config = _load_config()
-    prelim_names = _prelim_names(config)
-    prelim_plant = {p.strip().lower() for p in config.get("prelim_plant", [])}
+    prelim_names  = _prelim_names(config)
+    prelim_plant  = {p.strip().lower() for p in config.get("prelim_plant", [])}
+    vehicle_plant = {p.strip().lower() for p in config.get("vehicle_plant", [])}
 
     issues = []
-    labour_seen = {}  # name_lower -> gang_label
-    plant_seen = {}
+    labour_seen = {}
+    plant_seen  = {}
 
     for gang_label, day_data in all_gang_days:
         label = f"{day_data.get('day', '?')} {day_data.get('date_str', '')}"
@@ -407,7 +408,7 @@ def check_cross_gang_duplicates(all_gang_days):
         for entry in day_data.get("labour", []):
             key = entry["name"].strip().lower()
             if key in prelim_names:
-                continue  # Expected on all gangs — not a duplicate
+                continue
             if key in labour_seen:
                 issues.append(_issue(
                     "error", "cross_gang_duplicate",
@@ -421,12 +422,14 @@ def check_cross_gang_duplicates(all_gang_days):
         for entry in day_data.get("plant", []):
             key = entry["name"].strip().lower()
             if key in prelim_plant:
-                continue  # Expected on all gangs — not a duplicate
+                continue
+            if key not in vehicle_plant:
+                continue  # Only vehicles/machines are flagged as cross-gang duplicates
             if key in plant_seen:
                 issues.append(_issue(
                     "error", "cross_gang_duplicate",
                     f"Plant — '{entry['name']}' appears in both {plant_seen[key]} and {gang_label} on {label}. "
-                    f"Same item on two sheets — please check.",
+                    f"Same machine on two sheets — please check.",
                     day=label
                 ))
             else:
