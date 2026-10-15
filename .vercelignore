@@ -2,3 +2,5 @@
 *.pdf
 __pycache__
 .claude
+.local-config.json
+.env*

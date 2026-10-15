@@ -1,18 +1,13 @@
-import json
-import os
 from datetime import datetime
 from difflib import get_close_matches
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 EXPECTED_HOURS = 10.5
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 
 
 def _load_config():
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH) as f:
-            return json.load(f)
-    return {}
+    from storage import load_config
+    return load_config()
 
 
 def _prelim_names(config):
@@ -20,8 +15,9 @@ def _prelim_names(config):
     return {n.strip().lower() for n in config.get("prelim_operatives", {}).keys()}
 
 
-def _issue(severity, check, message, day=None, gang=None):
-    return {"severity": severity, "check": check, "message": message, "day": day, "gang": gang}
+def _issue(severity, check, message, day=None, gang=None, action=None):
+    """action, if set, tells the UI which button to offer (add_operative, add_plant, offhire)."""
+    return {"severity": severity, "check": check, "message": message, "day": day, "gang": gang, "action": action}
 
 
 # ---------------------------------------------------------------------------
@@ -110,14 +106,13 @@ def check_times(day_data):
     return issues
 
 
-def check_prelim_operatives(day_data):
+def check_prelim_operatives(day_data, config):
     """
     Peter Giblin and Mick Kilcoyne (prelim operatives) must always have:
       - Job 1 = 0.5 (daily briefing)
       - Job 2 = 10.0 (supervision duties)
       - Nothing else
     """
-    config = _load_config()
     prelims = config.get("prelim_operatives", {})
     if not prelims:
         return []
@@ -169,14 +164,13 @@ def check_prelim_operatives(day_data):
     return issues
 
 
-def check_known_operatives(day_data):
+def check_known_operatives(day_data, config):
     """
     Check every operative on the sheet against the master known_operatives list.
     - Flag anyone not on the list (unknown — may need adding to config)
     - Flag anyone listed with 0 total hours (should be removed or filled in)
     - Flag anyone whose trade doesn't match their expected trade
     """
-    config = _load_config()
     prelim_names = _prelim_names(config)
     known = {e["name"].strip().lower(): e for e in config.get("known_operatives", [])}
 
@@ -207,8 +201,9 @@ def check_known_operatives(day_data):
             issues.append(_issue(
                 "warning", "operatives",
                 f"Labour — {entry['name']} is not on the known operatives list.{suggestion} "
-                f"If they are a new or temporary worker, add them to settings.",
-                day=label, gang=gang
+                f"If they are a new or temporary worker, add them to the known list.",
+                day=label, gang=gang,
+                action={"type": "add_operative", "name": entry["name"].strip(), "trade": entry.get("trade", "").strip()},
             ))
             continue
 
@@ -226,14 +221,13 @@ def check_known_operatives(day_data):
     return issues
 
 
-def check_known_plant(day_data):
+def check_known_plant(day_data, config):
     """
     Check every plant item against the master known_plant list.
     - Prelim plant (Ford Ranger, Micks MAN LWB) is skipped — handled separately.
     - Flag anything not on the list.
     - Flag any plant row with 0 total hours.
     """
-    config = _load_config()
     prelim_plant = {p.strip().lower() for p in config.get("prelim_plant", [])}
     known = {p.strip().lower() for p in config.get("known_plant", [])}
 
@@ -266,16 +260,16 @@ def check_known_plant(day_data):
             issues.append(_issue(
                 "warning", "plant",
                 f"Plant — '{entry['name']}' is not on the known plant list.{suggestion} "
-                f"Check the name for typos, or add it to settings if it's new.",
-                day=label, gang=gang
+                f"Check the name for typos, or add it to the known list if it's new.",
+                day=label, gang=gang,
+                action={"type": "add_plant", "name": entry["name"].strip()},
             ))
 
     return issues
 
 
-def check_required_plant(day_data):
+def check_required_plant(day_data, config):
     """Every sheet must include Hand Tools, a Stihl Saw, and a set of chains."""
-    config = _load_config()
     groups = config.get("required_plant_groups", [])
     if not groups:
         return []
@@ -365,8 +359,9 @@ def check_formatting(day_data):
     return issues
 
 
-def run_day_checks(day_data):
+def run_day_checks(day_data, config=None):
     """Run all per-day checks."""
+    config = config if config is not None else _load_config()
     if day_data.get("parse_error"):
         return [_issue("error", "parse", f"Could not read page {day_data.get('page', '?')}: {day_data['parse_error']}")]
 
@@ -374,10 +369,10 @@ def run_day_checks(day_data):
     issues += check_date(day_data)
     issues += check_times(day_data)
     issues += check_hours(day_data)
-    issues += check_prelim_operatives(day_data)
-    issues += check_known_operatives(day_data)
-    issues += check_known_plant(day_data)
-    issues += check_required_plant(day_data)
+    issues += check_prelim_operatives(day_data, config)
+    issues += check_known_operatives(day_data, config)
+    issues += check_known_plant(day_data, config)
+    issues += check_required_plant(day_data, config)
     issues += check_duplicates_within_sheet(day_data)
     issues += check_formatting(day_data)
     return issues
@@ -387,13 +382,13 @@ def run_day_checks(day_data):
 # Cross-gang checks
 # ---------------------------------------------------------------------------
 
-def check_cross_gang_duplicates(all_gang_days):
+def check_cross_gang_duplicates(all_gang_days, config=None):
     """
     all_gang_days: list of (gang_label, day_data) tuples for a single calendar day.
     Flags duplicates across gangs, excluding prelim operatives who legitimately
     appear on all gangs.
     """
-    config = _load_config()
+    config = config if config is not None else _load_config()
     prelim_names  = _prelim_names(config)
     prelim_plant  = {p.strip().lower() for p in config.get("prelim_plant", [])}
     vehicle_plant = {p.strip().lower() for p in config.get("vehicle_plant", [])}
@@ -436,3 +431,65 @@ def check_cross_gang_duplicates(all_gang_days):
                 plant_seen[key] = gang_label
 
     return issues
+
+
+# ---------------------------------------------------------------------------
+# Offhire checks (across days / the whole upload)
+# ---------------------------------------------------------------------------
+
+def _offhire_candidates(config):
+    """Known + prelim plant, keyed by lowercase name. Required plant (hand tools,
+    saws, chains) is skipped — its absence is already an error, not an offhire."""
+    required = {v.strip().lower() for g in config.get("required_plant_groups", []) for v in g.get("variants", [])}
+    names = config.get("known_plant", []) + config.get("prelim_plant", [])
+    return {n.strip().lower(): n for n in names if n.strip().lower() not in required}
+
+
+def _plant_on(day_data):
+    return {e["name"].strip().lower() for e in day_data.get("plant", []) if e["stated_total"] > 0}
+
+
+def check_plant_dropoffs(pages_by_gang, config):
+    """
+    pages_by_gang: {gang_label: [day_data, ...]} with each list sorted by date.
+    Flags known plant that was on a gang's sheet one day and is gone the next,
+    unless it moved to another gang that day. Returns [(gang_label, index, issue)].
+    """
+    candidates = _offhire_candidates(config)
+
+    plant_by_date = {}
+    for days in pages_by_gang.values():
+        for d in days:
+            plant_by_date.setdefault(d.get("date_str"), set()).update(_plant_on(d))
+
+    found = []
+    for gang_label, days in pages_by_gang.items():
+        reported = set()
+        for i in range(1, len(days)):
+            prev, cur = days[i - 1], days[i]
+            if prev.get("parse_error") or cur.get("parse_error"):
+                continue
+            moved_or_kept = plant_by_date.get(cur.get("date_str"), set())
+            for key in sorted(_plant_on(prev) - moved_or_kept):
+                if key not in candidates or key in reported:
+                    continue
+                reported.add(key)
+                name = candidates[key]
+                prev_label = prev.get("day") or prev.get("date_str") or "the previous"
+                found.append((gang_label, i, _issue(
+                    "warning", "offhire",
+                    f"Plant — {name} was on {prev_label}'s sheet but isn't on this one. "
+                    f"Has this been offhired? Is this gone?",
+                    day=f"{cur.get('day', '?')} {cur.get('date_str', '')}", gang=cur.get("gang"),
+                    action={"type": "offhire", "name": name},
+                )))
+    return found
+
+
+def find_unseen_plant(all_pages, config, exclude=()):
+    """Known plant that doesn't appear on any sheet in this upload."""
+    seen = set()
+    for d in all_pages:
+        seen |= {e["name"].strip().lower() for e in d.get("plant", [])}
+    skip = {n.strip().lower() for n in exclude}
+    return [name for key, name in _offhire_candidates(config).items() if key not in seen and key not in skip]
