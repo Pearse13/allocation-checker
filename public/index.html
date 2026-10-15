@@ -373,12 +373,31 @@ async function postJSON(url, init) {
 
 let lastDays = null;   // parsed pages from the last run, so list edits can re-check without re-uploading
 
+// Spelling corrections accepted via "Yes, I meant X". Applied to the parsed pages before every
+// check this session (the PDFs themselves still need fixing). Key: "labour|name" / "plant|name".
+const corrections = new Map();
+
+function applyCorrections(days) {
+  if (!corrections.size) return days;
+  const fix = section => e => {
+    const c = corrections.get(`${section}|${e.name.trim().toLowerCase()}`);
+    return c ? { ...e, name: c.to } : e;
+  };
+  return days.map(d => ({ ...d, labour: (d.labour || []).map(fix("labour")), plant: (d.plant || []).map(fix("plant")) }));
+}
+
 async function runChecks(days) {
   return postJSON("/api/check", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ days }),
+    body: JSON.stringify({ days: applyCorrections(days) }),
   });
+}
+
+async function recheck() {
+  if (!lastDays) return;
+  try { renderResults(await runChecks(lastDays), false); }
+  catch (e) { setStatus("Couldn't refresh results: " + e.message, "err"); }
 }
 
 runBtn.onclick = async () => {
@@ -462,9 +481,7 @@ async function updateConfig(body) {
 async function afterChange(message) {
   toast(message);
   loadMenu();
-  if (!lastDays) return;
-  try { renderResults(await runChecks(lastDays), false); }
-  catch (e) { setStatus("Couldn't refresh results: " + e.message, "err"); }
+  await recheck();
 }
 
 // Wires a button to an update call, showing errors inline in `box`.
@@ -513,7 +530,30 @@ function actionButtons(box, a) {
   }
   const b = el("button", { class: "btn" }, a.type === "add_operative" ? "Add to labour roster" : "Add to known plant");
   b.onclick = () => addForm(box, a);
-  return [b];
+  if (!a.suggestion) return [b];
+
+  const yes = el("button", { class: "btn primary" }, `Yes, I meant ${a.suggestion}`);
+  yes.onclick = async () => {
+    const section = a.type === "add_operative" ? "labour" : "plant";
+    corrections.set(`${section}|${a.name.toLowerCase()}`, { section, from: a.name, to: a.suggestion });
+    yes.disabled = true;
+    toast(`Treating '${a.name}' as '${a.suggestion}'. Fix it on the sheet before sign-off.`);
+    await recheck();
+  };
+  return [yes, b];
+}
+
+function correctionsNode() {
+  const rows = [...corrections.entries()].map(([key, c]) => {
+    const undo = el("button", { class: "btn" }, "Undo");
+    undo.onclick = async () => { corrections.delete(key); await recheck(); };
+    return el("div", { class: "unseen-row" },
+      el("div", { class: "actions", style: "margin-top:0;justify-content:space-between" },
+        el("span", { class: "q" }, `'${c.from}' → `, el("b", {}, c.to)), undo));
+  });
+  return el("div", { class: "unseen" },
+    el("p", { class: "unseen-note" }, "These spellings are being treated as corrected for this check. Fix them on the sheets before sign-off."),
+    rows);
 }
 
 // ── Results ──────────────────────────────────────────────────────────
@@ -587,6 +627,13 @@ function renderResults(r, scroll) {
       el("div", { class: "metric" }, el("div", { class: "metric-val c-white" }, String(s.days)), el("div", { class: "metric-lbl" }, `${plural(s.gangs, "gang")} · ${plural(s.days, "day")} checked`))),
   ];
   if (!s.errors && !s.warnings) out.push(el("div", { class: "success" }, "All checks passed across every sheet."));
+
+  if (corrections.size) {
+    out.push(el("div", { class: "gang", style: "margin-top:0" },
+      el("span", { class: "gang-name" }, "Spelling fixes to make"),
+      el("span", { class: "gang-file" }, plural(corrections.size, "item"))));
+    out.push(correctionsNode());
+  }
 
   for (const g of r.gangs) {
     out.push(el("div", { class: "gang" },

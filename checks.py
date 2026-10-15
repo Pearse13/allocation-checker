@@ -203,7 +203,8 @@ def check_known_operatives(day_data, config):
                 f"Labour — {entry['name']} is not on the known operatives list.{suggestion} "
                 f"If they are a new or temporary worker, add them to the known list.",
                 day=label, gang=gang,
-                action={"type": "add_operative", "name": entry["name"].strip(), "trade": entry.get("trade", "").strip()},
+                action={"type": "add_operative", "name": entry["name"].strip(), "trade": entry.get("trade", "").strip(),
+                        "suggestion": known[close[0]]["name"] if close else None},
             ))
             continue
 
@@ -252,17 +253,14 @@ def check_known_plant(day_data, config):
 
         if key not in known:
             close = get_close_matches(key, known, n=1, cutoff=0.8)
-            if close:
-                original = next(p for p in config["known_plant"] if p.strip().lower() == close[0])
-                suggestion = f" Did you mean '{original}'?"
-            else:
-                suggestion = ""
+            original = next(p for p in config["known_plant"] if p.strip().lower() == close[0]) if close else None
+            suggestion = f" Did you mean '{original}'?" if original else ""
             issues.append(_issue(
                 "warning", "plant",
                 f"Plant — '{entry['name']}' is not on the known plant list.{suggestion} "
                 f"Check the name for typos, or add it to the known list if it's new.",
                 day=label, gang=gang,
-                action={"type": "add_plant", "name": entry["name"].strip()},
+                action={"type": "add_plant", "name": entry["name"].strip(), "suggestion": original},
             ))
 
     return issues
