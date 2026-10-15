@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SheetCheck</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23f59e0b'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #141726;
+    --border: #1d2035;
+    --dash: #252840;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --dim: #475569;
+    --faint: #334155;
+    --amber: #f59e0b;
+    --amber-dk: #d97706;
+    --red: #ef4444;
+    --green: #22c55e;
+    --gutter: 3.5rem;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 var(--gutter) 5rem; }
+
+  /* ── Hero ─────────────────────────────────────── */
+  .hero {
+    margin: 0 calc(-1 * var(--gutter));
+    background:
+      linear-gradient(160deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.78) 100%),
+      url("hero.jpg") center 38% / cover no-repeat;
+    padding: 110px var(--gutter) 68px;
+    min-height: 420px;
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .pill {
+    display: inline-flex; width: fit-content;
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.28);
+    color: var(--amber);
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+    padding: 5px 13px; border-radius: 100px; margin-bottom: 22px;
+  }
+  .hero h1 {
+    font-size: 3.75rem; font-weight: 800; color: #fff;
+    letter-spacing: -0.04em; line-height: 1; margin: 0 0 16px;
+  }
+  .hero p { font-size: 1rem; color: rgba(255,255,255,0.5); max-width: 420px; line-height: 1.65; margin: 0; }
+
+  .label {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--amber); margin: 44px 0 14px;
+  }
+
+  /* ── Mode toggle ──────────────────────────────── */
+  .modes { display: flex; gap: 20px; margin-bottom: 16px; font-size: 0.875rem; }
+  .modes label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #cbd5e1; }
+  .modes input { accent-color: var(--amber); margin: 0; }
+
+  /* ── Upload cards ─────────────────────────────── */
+  .uploads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .uploads.single { grid-template-columns: 1fr; }
+  .up {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px;
+  }
+  .up-title {
+    font-size: 0.7rem; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.12em; margin: 2px 4px 10px;
+  }
+  .drop {
+    position: relative;
+    border: 1.5px dashed var(--dash); border-radius: 10px; min-height: 90px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    padding: 14px; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .drop:hover, .drop.over { border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.03); }
+  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop .hint { color: var(--dim); font-size: 0.78rem; }
+  .drop .sub { color: var(--faint); font-size: 0.7rem; }
+  .files { list-style: none; margin: 10px 0 0; padding: 0; }
+  .files li {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 0.8rem; color: #cbd5e1; padding: 6px 4px;
+  }
+  .files li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .files button {
+    background: none; border: none; color: var(--dim); cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 6px;
+  }
+  .files button:hover { color: var(--red); }
+
+  .run {
+    margin-top: 22px;
+    background: var(--amber); color: #0a0c14;
+    font: 700 0.85rem 'Inter', sans-serif; letter-spacing: 0.03em;
+    border: none; border-radius: 10px; padding: 0.75rem 2.25rem; cursor: pointer;
+    transition: box-shadow 0.2s, background 0.2s;
+  }
+  .run:hover:not(:disabled) { background: var(--amber-dk); box-shadow: 0 8px 28px rgba(245,158,11,0.3); }
+  .run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status { margin-top: 18px; font-size: 0.875rem; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+  .status.err { color: #fca5a5; }
+  .spin {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--amber);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  hr.rule { height: 1px; background: var(--border); border: none; margin: 44px calc(-1 * var(--gutter)) 0; }
+
+  /* ── Summary ──────────────────────────────────── */
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 52px; }
+  .metric { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px 26px 22px; }
+  .metric-val { font-size: 2.75rem; font-weight: 800; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  .metric-lbl { font-size: 0.62rem; color: var(--dim); margin-top: 10px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; }
+  .c-red { color: var(--red); } .c-amber { color: var(--amber); } .c-green { color: var(--green); } .c-white { color: var(--text); }
+
+  .success {
+    background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #86efac;
+    padding: 14px 18px; border-radius: 10px; font-size: 0.875rem; margin-bottom: 8px;
+  }
+
+  /* ── Gang sections ────────────────────────────── */
+  .gang { display: flex; align-items: baseline; gap: 10px; margin: 48px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .gang-name { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); }
+  .gang-file { font-size: 0.75rem; color: var(--faint); }
+
+  details.day { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+  details.day > summary {
+    list-style: none; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+    font-size: 0.875rem; font-weight: 500; color: #cbd5e1; padding: 14px 18px; line-height: 1.4;
+  }
+  details.day > summary::-webkit-details-marker { display: none; }
+  details.day > summary::before { content: "›"; color: var(--dim); font-size: 1.1rem; margin-right: 4px; transition: transform 0.15s; display: inline-block; }
+  details.day[open] > summary::before { transform: rotate(90deg); }
+  details.day > summary:hover { color: #f1f5f9; }
+  details.day[open] > summary { border-bottom: 1px solid var(--border); }
+  .sum-left { display: flex; align-items: center; flex: 1; min-width: 0; }
+  .badge { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+  .badge .e { color: #fca5a5; } .badge .w { color: #fcd34d; } .badge .ok { color: var(--green); }
+  .day-body { padding: 16px 18px; }
+  .clear { color: var(--green); font-size: 0.875rem; margin: 0; }
+
+  .issue { padding: 11px 16px; border-radius: 0 8px 8px 0; margin-bottom: 7px; font-size: 0.875rem; line-height: 1.55; }
+  .issue.error { background: rgba(239,68,68,0.07); border-left: 3px solid var(--red); color: #fca5a5; }
+  .issue.warning { background: rgba(245,158,11,0.07); border-left: 3px solid var(--amber); color: #fcd34d; }
+  .issue-label { font-weight: 700; text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.14em; margin-bottom: 5px; opacity: 0.6; }
+
+  details.parsed { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; }
+  details.parsed > summary { cursor: pointer; font-size: 0.8rem; color: var(--muted); padding: 10px 14px; }
+  .parsed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 4px 14px 14px; font-size: 0.82rem; color: #cbd5e1; }
+  .parsed-grid h4 { margin: 6px 0 8px; font-size: 0.8rem; color: var(--text); }
+  .parsed-grid ul { margin: 0; padding-left: 18px; line-height: 1.7; }
+
+  /* ── Config menu ──────────────────────────────── */
+  .menu-btn {
+    position: fixed; top: 14px; left: 20px; z-index: 100;
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    color: #94a3b8; font-size: 0.95rem; cursor: pointer;
+  }
+  .menu-btn:hover, .menu-btn[aria-expanded="true"] { border-color: var(--amber); color: var(--amber); background: #1a1d2e; }
+  .menu {
+    position: fixed; top: 58px; left: 20px; z-index: 100;
+    width: 360px; max-width: calc(100vw - 40px); max-height: 80vh; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6); padding: 18px;
+  }
+  .menu-title { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); margin: 0 0 14px; }
+  .menu details { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; }
+  .menu summary { cursor: pointer; padding: 10px 14px; font-size: 0.84rem; color: #cbd5e1; }
+  .menu summary .n { color: var(--dim); }
+  .menu ul { margin: 0; padding: 0 14px 12px 32px; font-size: 0.8rem; color: #94a3b8; line-height: 1.7; }
+  .menu b { color: var(--text); font-weight: 600; }
+
+  @media (max-width: 760px) {
+    :root { --gutter: 16px; }
+    .hero { padding-top: 90px; min-height: 340px; }
+    .hero h1 { font-size: 2.6rem; }
+    .uploads { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: 1fr; }
+    .parsed-grid { grid-template-columns: 1fr; }
+    .metric-val { font-size: 2.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<button class="menu-btn" id="menuBtn" aria-label="Configuration" aria-expanded="false" aria-controls="menu">☰</button>
+<div class="menu" id="menu" hidden>
+  <p class="menu-title">Configuration</p>
+  <div id="menuBody"><p style="color:var(--dim);font-size:0.8rem">Loading…</p></div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="pill">ACS Civils</div>
+    <h1>SheetCheck</h1>
+    <p>Catches errors in your daily allocation sheets before they're signed off.</p>
+  </header>
+
+  <div class="label">Upload PDFs</div>
+  <div class="modes" role="radiogroup" aria-label="Upload mode">
+    <label><input type="radio" name="mode" value="gang" checked> By gang</label>
+    <label><input type="radio" name="mode" value="combined"> Combined PDF</label>
+  </div>
+
+  <div class="uploads" id="byGang">
+    <div class="up" data-slot="gang1"><div class="up-title">Gang 1</div></div>
+    <div class="up" data-slot="gang2"><div class="up-title">Gang 2</div></div>
+    <div class="up" data-slot="gang3"><div class="up-title">Gang 3</div></div>
+  </div>
+  <div class="uploads single" id="combined" hidden>
+    <div class="up" data-slot="combined" data-multi="1"></div>
+  </div>
+
+  <button class="run" id="run" disabled>Run Checks →</button>
+  <div class="status" id="status" hidden></div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+const CHECK_LABELS = {
+  hours: "Hours total", hours_maths: "Hours maths", date: "Date / day", times: "Start / finish",
+  prelim_operative: "Prelim operative", operatives: "Unknown operative", trade: "Trade mismatch",
+  plant: "Unknown plant", required_plant: "Required plant", duplicates: "Duplicate",
+  cross_gang_duplicate: "Cross-gang duplicate", formatting: "Formatting", parse: "Parse error",
+};
+
+// Builds a DOM element; children may be strings (as text) or nodes. No innerHTML with sheet data.
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "open") n.open = !!v;
+    else n.setAttribute(k, v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) n.append(c);
+  return n;
+}
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+// ── Uploads ──────────────────────────────────────────────────────────
+const slots = {};   // slot name -> File[]
+const runBtn = document.getElementById("run");
+
+function mode() { return document.querySelector('input[name="mode"]:checked').value; }
+
+function activeFiles() {
+  return mode() === "gang"
+    ? ["gang1", "gang2", "gang3"].flatMap(s => slots[s] || [])
+    : (slots.combined || []);
+}
+
+function refresh() { runBtn.disabled = activeFiles().length === 0; }
+
+function setupSlot(card) {
+  const slot = card.dataset.slot, multi = !!card.dataset.multi;
+  slots[slot] = [];
+  const input = el("input", { type: "file", accept: "application/pdf,.pdf", "aria-label": "Choose PDF" });
+  if (multi) input.multiple = true;
+  const drop = el("div", { class: "drop" },
+    el("span", { class: "hint" }, multi ? "Drag and drop PDFs here, or click to browse" : "Drag and drop a PDF here, or click to browse"),
+    el("span", { class: "sub" }, "PDF only"),
+    input);
+  const list = el("ul", { class: "files" });
+  card.append(drop, list);
+
+  const render = () => {
+    list.replaceChildren(...slots[slot].map((f, i) => {
+      const rm = el("button", { "aria-label": `Remove ${f.name}`, title: "Remove" }, "×");
+      rm.onclick = () => { slots[slot].splice(i, 1); render(); };
+      return el("li", {}, el("span", {}, f.name), rm);
+    }));
+    refresh();
+  };
+  const add = files => {
+    const pdfs = [...files].filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    if (!pdfs.length) return;
+    slots[slot] = multi ? slots[slot].concat(pdfs) : [pdfs[0]];
+    render();
+  };
+  input.onchange = () => { add(input.files); input.value = ""; };
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer.files); };
+}
+document.querySelectorAll(".up").forEach(setupSlot);
+
+document.querySelectorAll('input[name="mode"]').forEach(r => r.onchange = () => {
+  document.getElementById("byGang").hidden = mode() !== "gang";
+  document.getElementById("combined").hidden = mode() !== "combined";
+  refresh();
+});
+
+// ── Run ──────────────────────────────────────────────────────────────
+const statusEl = document.getElementById("status");
+const resultsEl = document.getElementById("results");
+
+function setStatus(text, kind) {
+  statusEl.hidden = !text;
+  statusEl.className = "status" + (kind === "err" ? " err" : "");
+  statusEl.replaceChildren(...(kind === "busy" ? [el("div", { class: "spin" })] : []), text || "");
+}
+
+async function postJSON(url, init) {
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    if (res.status === 413) msg = "File is too large to upload (max 4.5 MB per PDF).";
+    try { const j = await res.json(); if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+runBtn.onclick = async () => {
+  const files = activeFiles();
+  runBtn.disabled = true;
+  resultsEl.replaceChildren();
+  try {
+    setStatus("Reading PDFs…", "busy");
+    const parsed = await Promise.all(files.map(f => {
+      const fd = new FormData();
+      fd.append("file", f, f.name);
+      return postJSON("/api/parse", { method: "POST", body: fd })
+        .catch(e => { throw new Error(`${f.name}: ${e.message}`); });
+    }));
+    setStatus("Running checks…", "busy");
+    const result = await postJSON("/api/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days: parsed.flatMap(p => p.days) }),
+    });
+    setStatus("");
+    renderResults(result);
+  } catch (e) {
+    setStatus("Something went wrong: " + e.message, "err");
+  } finally {
+    refresh();
+  }
+};
+
+// ── Results ──────────────────────────────────────────────────────────
+function issueNode(i) {
+  const label = CHECK_LABELS[i.check] || i.check.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const icon = i.severity === "error" ? "❌" : "⚠️";
+  return el("div", { class: `issue ${i.severity}` },
+    el("div", { class: "issue-label" }, `${icon}  ${label}`), i.message);
+}
+
+function badgeNode(issues) {
+  const e = issues.filter(i => i.severity === "error").length;
+  const w = issues.filter(i => i.severity === "warning").length;
+  if (!issues.length) return el("span", { class: "badge" }, el("span", { class: "ok" }, "✅ Clear"));
+  return el("span", { class: "badge" },
+    e ? el("span", { class: "e" }, `❌ ${plural(e, "error")}`) : null,
+    e && w ? "  " : null,
+    w ? el("span", { class: "w" }, `⚠️ ${plural(w, "warning")}`) : null);
+}
+
+function dayNode({ day, issues }) {
+  const title = `${day.day || `Page ${day.page ?? "?"}`}  ${day.date_str || ""}`.trim();
+  const ordered = [...issues.filter(i => i.severity === "error"), ...issues.filter(i => i.severity === "warning")];
+  const body = el("div", { class: "day-body" },
+    ordered.length ? ordered.map(issueNode) : el("p", { class: "clear" }, "No issues found."));
+
+  const labour = day.labour || [], plant = day.plant || [];
+  if (labour.length || plant.length) {
+    body.append(el("details", { class: "parsed" },
+      el("summary", {}, "View parsed data"),
+      el("div", { class: "parsed-grid" },
+        el("div", {}, labour.length ? [el("h4", {}, "Labour"),
+          el("ul", {}, labour.map(e => el("li", {}, `${e.name} | ${e.trade || "—"} | ${e.stated_total}h`)))] : null),
+        el("div", {}, plant.length ? [el("h4", {}, "Plant"),
+          el("ul", {}, plant.map(e => el("li", {}, `${e.name} | ${e.stated_total}h`)))] : null))));
+  }
+
+  return el("details", { class: "day", open: issues.length > 0 },
+    el("summary", {}, el("span", { class: "sum-left" }, title), badgeNode(issues)),
+    body);
+}
+
+function renderResults(r) {
+  const s = r.summary;
+  const out = [
+    el("hr", { class: "rule" }),
+    el("div", { class: "label" }, "Summary"),
+    el("div", { class: "metrics" },
+      el("div", { class: "metric" }, el("div", { class: `metric-val ${s.errors ? "c-red" : "c-green"}` }, String(s.errors)), el("div", { class: "metric-lbl" }, "Errors")),
+      el("div", { class: "metric" }, el("div", { class: `metric-val ${s.warnings ? "c-amber" : "c-green"}` }, String(s.warnings)), el("div", { class: "metric-lbl" }, "Warnings")),
+      el("div", { class: "metric" }, el("div", { class: "metric-val c-white" }, String(s.days)), el("div", { class: "metric-lbl" }, `${plural(s.gangs, "gang")} · ${plural(s.days, "day")} checked`))),
+  ];
+  if (!s.errors && !s.warnings) out.push(el("div", { class: "success" }, "All checks passed across every sheet."));
+
+  for (const g of r.gangs) {
+    out.push(el("div", { class: "gang" },
+      el("span", { class: "gang-name" }, g.label),
+      el("span", { class: "gang-file" }, g.files.join(", "))));
+    out.push(...g.days.map(dayNode));
+  }
+
+  if (r.cross_gang) {
+    out.push(el("div", { class: "gang" }, el("span", { class: "gang-name" }, "Cross-Gang Checks")));
+    out.push(...(r.cross_gang.length ? r.cross_gang.map(issueNode) : [el("div", { class: "success" }, "No cross-gang duplicates found.")]));
+  }
+
+  resultsEl.replaceChildren(...out);
+  resultsEl.firstChild.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ── Config menu ──────────────────────────────────────────────────────
+const menuBtn = document.getElementById("menuBtn"), menu = document.getElementById("menu");
+menuBtn.onclick = e => {
+  e.stopPropagation();
+  menu.hidden = !menu.hidden;
+  menuBtn.setAttribute("aria-expanded", String(!menu.hidden));
+};
+document.addEventListener("click", e => {
+  if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") { menu.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); } });
+
+fetch("/api/config").then(r => r.json()).then(cfg => {
+  const section = (title, items) => el("details", {},
+    el("summary", {}, title, el("span", { class: "n" }, `  ·  ${items.length}`)),
+    el("ul", {}, items.map(i => el("li", {}, i))));
+  document.getElementById("menuBody").replaceChildren(
+    section("Prelim Operatives", Object.keys(cfg.prelim_operatives || {})),
+    section("Labour Roster", (cfg.known_operatives || []).map(o => [el("b", {}, o.name), ` — ${o.trade}`])),
+    section("Prelim Plant", cfg.prelim_plant || []),
+    section("Required Plant", (cfg.required_plant_groups || []).map(g => [el("b", {}, g.label), ` — ${g.variants.join(" / ")}`])),
+    section("Known Plant", cfg.known_plant || []));
+}).catch(() => {
+  document.getElementById("menuBody").replaceChildren(el("p", { style: "color:#fca5a5;font-size:0.8rem" }, "Could not load configuration."));
+});
+</script>
+</body>
+</html>

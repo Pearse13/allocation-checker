@@ -1,548 +1,119 @@
-import base64
+"""
+SheetCheck API — FastAPI app deployed as a Vercel Python function.
+
+The static front end lives in public/ (served by Vercel's CDN). It uploads
+each PDF to /api/parse, then posts every parsed page to /api/check so the
+cross-gang checks can see all gangs at once.
+"""
+import io
 import json
 import os
-import streamlit as st
 from collections import defaultdict
 from datetime import date as date_type
-from parser import parse_pdf, infer_missing_fields
-from checks import run_day_checks, check_cross_gang_duplicates
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.staticfiles import StaticFiles
+
+from checks import check_cross_gang_duplicates, run_day_checks
+from parser import infer_missing_fields, parse_pdf
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-with open(CONFIG_PATH) as _f:
-    _config = json.load(_f)
 
-st.set_page_config(page_title="SheetCheck", layout="wide", page_icon="🟠")
-
-with open("hero.jpg", "rb") as f:
-    hero_b64 = base64.b64encode(f.read()).decode()
-
-st.markdown(f"""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-    html, body, [class*="css"] {{
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }}
-
-    #MainMenu, footer, header {{ visibility: hidden; }}
-
-    /* Page container */
-    .block-container {{
-        padding: 0 3.5rem 5rem !important;
-        max-width: 1160px !important;
-    }}
-
-    /* ── Hero ────────────────────────────────────── */
-    .sc-hero {{
-        margin: 0 -3.5rem 0;
-        background:
-            linear-gradient(160deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.78) 100%),
-            url("data:image/jpeg;base64,{hero_b64}") center 38% / cover no-repeat;
-        padding: 110px 3.5rem 68px;
-        min-height: 420px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-    }}
-
-    .sc-pill {{
-        display: inline-flex;
-        align-items: center;
-        background: rgba(245,158,11,0.12);
-        border: 1px solid rgba(245,158,11,0.28);
-        color: #f59e0b;
-        font-size: 0.62rem;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        padding: 5px 13px;
-        border-radius: 100px;
-        margin-bottom: 22px;
-        width: fit-content;
-    }}
-
-    .sc-hero-title {{
-        font-size: 3.75rem;
-        font-weight: 800;
-        color: #ffffff;
-        letter-spacing: -0.04em;
-        line-height: 1;
-        margin-bottom: 16px;
-    }}
-
-    .sc-hero-sub {{
-        font-size: 1rem;
-        color: rgba(255,255,255,0.5);
-        max-width: 420px;
-        line-height: 1.65;
-    }}
-
-    /* ── Section labels ──────────────────────────── */
-    .sc-label {{
-        font-size: 0.62rem;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: #f59e0b;
-        margin: 44px 0 14px;
-    }}
-
-    /* ── Upload cards ────────────────────────────── */
-    [data-testid="stFileUploader"] {{
-        background: #141726;
-        border: 1px solid #1d2035;
-        border-radius: 14px;
-        padding: 4px 4px 8px;
-    }}
-    [data-testid="stFileUploader"] label p {{
-        font-size: 0.7rem !important;
-        font-weight: 700 !important;
-        color: #64748b !important;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-    }}
-    [data-testid="stFileUploaderDropzone"] {{
-        background: transparent !important;
-        border: 1.5px dashed #252840 !important;
-        border-radius: 10px !important;
-        min-height: 90px;
-        transition: border-color 0.2s, background 0.2s;
-    }}
-    [data-testid="stFileUploaderDropzone"]:hover {{
-        border-color: rgba(245,158,11,0.45) !important;
-        background: rgba(245,158,11,0.03) !important;
-    }}
-    [data-testid="stFileUploaderDropzoneInstructions"] div span {{
-        color: #475569 !important;
-        font-size: 0.78rem !important;
-    }}
-    [data-testid="stFileUploaderDropzoneInstructions"] div small {{
-        color: #334155 !important;
-        font-size: 0.7rem !important;
-    }}
-
-    /* ── Run button ──────────────────────────────── */
-    div[data-testid="stButton"] > button[kind="primary"] {{
-        background: #f59e0b !important;
-        color: #0a0c14 !important;
-        font-weight: 700 !important;
-        font-size: 0.85rem !important;
-        letter-spacing: 0.03em;
-        border: none !important;
-        border-radius: 10px !important;
-        padding: 0.65rem 2.25rem !important;
-        margin-top: 22px;
-        box-shadow: 0 0 0 0 rgba(245,158,11,0);
-        transition: box-shadow 0.2s, transform 0.15s;
-    }}
-    div[data-testid="stButton"] > button[kind="primary"]:hover {{
-        background: #d97706 !important;
-        box-shadow: 0 8px 28px rgba(245,158,11,0.3) !important;
-    }}
-
-    /* ── Divider ─────────────────────────────────── */
-    .sc-rule {{
-        height: 1px;
-        background: #1d2035;
-        margin: 0 -3.5rem;
-        border: none;
-    }}
-
-    /* ── Summary metrics ─────────────────────────── */
-    .sc-metrics {{
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        margin: 44px 0 52px;
-    }}
-    .sc-metric {{
-        background: #141726;
-        border: 1px solid #1d2035;
-        border-radius: 14px;
-        padding: 24px 26px 22px;
-    }}
-    .sc-metric-val {{
-        font-size: 2.75rem;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: -0.04em;
-        font-variant-numeric: tabular-nums;
-    }}
-    .sc-metric-lbl {{
-        font-size: 0.62rem;
-        color: #475569;
-        margin-top: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        font-weight: 600;
-    }}
-    .col-red   {{ color: #ef4444; }}
-    .col-amber {{ color: #f59e0b; }}
-    .col-green {{ color: #22c55e; }}
-    .col-white {{ color: #e2e8f0; }}
-
-    /* ── Gang section header ─────────────────────── */
-    .sc-gang {{
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-        margin: 48px 0 14px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #1d2035;
-    }}
-    .sc-gang-name {{
-        font-size: 0.62rem;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: #f59e0b;
-    }}
-    .sc-gang-file {{
-        font-size: 0.75rem;
-        color: #334155;
-        font-weight: 400;
-    }}
-
-    /* ── Expanders ───────────────────────────────── */
-    [data-testid="stExpander"] {{
-        background: #141726 !important;
-        border: 1px solid #1d2035 !important;
-        border-radius: 12px !important;
-        margin-bottom: 8px !important;
-        overflow: hidden !important;
-    }}
-    [data-testid="stExpander"] summary {{
-        font-size: 0.875rem !important;
-        font-weight: 500 !important;
-        color: #cbd5e1 !important;
-        padding: 14px 18px !important;
-        line-height: 1.4 !important;
-    }}
-    [data-testid="stExpander"] summary:hover {{
-        color: #f1f5f9 !important;
-    }}
-    [data-testid="stExpander"] details[open] summary {{
-        border-bottom: 1px solid #1d2035;
-    }}
-    [data-testid="stExpander"] .streamlit-expanderContent {{
-        padding: 16px 18px !important;
-    }}
-
-    /* ── Info popover button (fixed top-right) ───── */
-    div[data-testid="stPopover"] {{
-        position: fixed !important;
-        top: 14px !important;
-        left: 20px !important;
-        z-index: 99999 !important;
-    }}
-    div[data-testid="stPopover"] button {{
-        background: #141726 !important;
-        border: 1px solid #1d2035 !important;
-        border-radius: 6px !important;
-        color: #94a3b8 !important;
-        font-size: 0.85rem !important;
-        width: 36px !important;
-        height: 36px !important;
-        padding: 0 !important;
-        min-width: unset !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        line-height: 1 !important;
-    }}
-    div[data-testid="stPopover"] button:hover {{
-        border-color: #f59e0b !important;
-        color: #f59e0b !important;
-        background: #1a1d2e !important;
-    }}
-    div[data-testid="stPopover"] button p {{
-        margin: 0 !important;
-        line-height: 1 !important;
-    }}
-    /* Popover body */
-    div[data-testid="stPopoverBody"] {{
-        background: #141726 !important;
-        border: 1px solid #1d2035 !important;
-        border-radius: 14px !important;
-        padding: 0 !important;
-        min-width: 340px !important;
-        max-height: 80vh !important;
-        overflow-y: auto !important;
-        box-shadow: 0 24px 64px rgba(0,0,0,0.6) !important;
-    }}
-
-    /* ── Issue cards ─────────────────────────────── */
-    .issue-error {{
-        background: rgba(239,68,68,0.07);
-        border-left: 3px solid #ef4444;
-        padding: 11px 16px;
-        border-radius: 0 8px 8px 0;
-        margin-bottom: 7px;
-        font-size: 0.875rem;
-        color: #fca5a5;
-        line-height: 1.55;
-    }}
-    .issue-warning {{
-        background: rgba(245,158,11,0.07);
-        border-left: 3px solid #f59e0b;
-        padding: 11px 16px;
-        border-radius: 0 8px 8px 0;
-        margin-bottom: 7px;
-        font-size: 0.875rem;
-        color: #fcd34d;
-        line-height: 1.55;
-    }}
-    .issue-label {{
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 0.6rem;
-        letter-spacing: 0.14em;
-        margin-bottom: 5px;
-        opacity: 0.5;
-    }}
-</style>
-""", unsafe_allow_html=True)
-
-CHECK_LABELS = {
-    "hours":                "Hours total",
-    "hours_maths":          "Hours maths",
-    "date":                 "Date / day",
-    "times":                "Start / finish",
-    "prelim_operative":     "Prelim operative",
-    "operatives":           "Unknown operative",
-    "trade":                "Trade mismatch",
-    "plant":                "Unknown plant",
-    "required_plant":       "Required plant",
-    "duplicates":           "Duplicate",
-    "cross_gang_duplicate": "Cross-gang duplicate",
-    "formatting":           "Formatting",
-    "parse":                "Parse error",
-}
+app = FastAPI(title="SheetCheck")
 
 
-def render_issue(issue):
-    label = CHECK_LABELS.get(issue["check"], issue["check"].replace("_", " ").title())
-    cls  = "issue-error"   if issue["severity"] == "error" else "issue-warning"
-    icon = "❌"            if issue["severity"] == "error" else "⚠️"
-    st.markdown(
-        f'<div class="{cls}"><div class="issue-label">{icon}&nbsp;&nbsp;{label}</div>{issue["message"]}</div>',
-        unsafe_allow_html=True,
-    )
+def _to_json(day):
+    """Make a parsed day JSON-safe (date objects → ISO strings)."""
+    out = dict(day)
+    if isinstance(out.get("date"), date_type):
+        out["date"] = out["date"].isoformat()
+    return out
 
 
-def fmt_day(day_data):
-    day  = day_data.get("day") or f"Page {day_data.get('page', '?')}"
-    date = day_data.get("date_str", "")
-    return f"{day}  {date}".strip()
+def _from_json(day):
+    """Restore date objects on a day posted back from the browser."""
+    out = dict(day)
+    if out.get("date"):
+        try:
+            out["date"] = date_type.fromisoformat(out["date"])
+        except (TypeError, ValueError):
+            out["date"] = None
+    return out
 
 
-def badge(issues):
-    errors   = [i for i in issues if i["severity"] == "error"]
-    warnings = [i for i in issues if i["severity"] == "warning"]
-    if not issues:
-        return "✅ Clear"
-    parts = []
-    if errors:
-        parts.append(f"❌ {len(errors)} error{'s' if len(errors) > 1 else ''}")
-    if warnings:
-        parts.append(f"⚠️ {len(warnings)} warning{'s' if len(warnings) > 1 else ''}")
-    return "  ".join(parts)
+@app.get("/api/config")
+def get_config():
+    with open(CONFIG_PATH) as f:
+        return json.load(f)
 
 
-# ── Info popover (fixed top-right) ───────────────────────────────────────────
-with st.popover("☰"):
-    st.markdown('<p style="font-size:0.65rem;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#f59e0b;margin:0 0 16px">Configuration</p>', unsafe_allow_html=True)
+@app.post("/api/parse")
+async def parse(file: UploadFile = File(...)):
+    data = await file.read()
+    try:
+        days = parse_pdf(io.BytesIO(data))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not open {file.filename} as a PDF: {e}")
+    days = infer_missing_fields(days)
+    for d in days:
+        d["_source_file"] = file.filename
+    return {"days": [_to_json(d) for d in days]}
 
-    with st.expander(f"Prelim Operatives  ·  {len(_config.get('prelim_operatives', {}))}"):
-        for name in _config.get("prelim_operatives", {}):
-            st.markdown(f"- {name}")
 
-    with st.expander(f"Labour Roster  ·  {len(_config.get('known_operatives', []))}"):
-        for op in _config.get("known_operatives", []):
-            st.markdown(f"- **{op['name']}** — {op['trade']}")
+@app.post("/api/check")
+def check(payload: dict):
+    all_pages = [_from_json(d) for d in payload.get("days", [])]
 
-    with st.expander(f"Prelim Plant  ·  {len(_config.get('prelim_plant', []))}"):
-        for p in _config.get("prelim_plant", []):
-            st.markdown(f"- {p}")
+    # Group by gang (from the page header, not which uploader it came from)
+    pages_by_gang = defaultdict(list)
+    for d in all_pages:
+        gang_key = f"Gang {d['gang']}" if d.get("gang") else "Gang ?"
+        pages_by_gang[gang_key].append(d)
 
-    with st.expander(f"Required Plant  ·  {len(_config.get('required_plant_groups', []))}"):
-        for grp in _config.get("required_plant_groups", []):
-            st.markdown(f"- **{grp['label']}** — {' / '.join(grp['variants'])}")
+    for gang_key in pages_by_gang:
+        pages_by_gang[gang_key].sort(key=lambda d: d.get("date") or date_type.max)
 
-    with st.expander(f"Known Plant  ·  {len(_config.get('known_plant', []))}"):
-        for p in _config.get("known_plant", []):
-            st.markdown(f"- {p}")
+    all_results = {
+        gang_key: [(d, run_day_checks(d)) for d in days]
+        for gang_key, days in pages_by_gang.items()
+    }
 
-# ── Hero ─────────────────────────────────────────────────────────────────────
-st.markdown(f"""
-<div class="sc-hero">
-    <div class="sc-pill">ACS Civils</div>
-    <div class="sc-hero-title">SheetCheck</div>
-    <div class="sc-hero-sub">Catches errors in your daily allocation sheets before they're signed off.</div>
-</div>
-""", unsafe_allow_html=True)
+    days_by_date = defaultdict(list)
+    for gang_key, days in pages_by_gang.items():
+        for day_data in days:
+            key = day_data.get("date_str") or f"page_{day_data.get('page')}"
+            days_by_date[key].append((gang_key, day_data))
 
-# ── Upload ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="sc-label">Upload PDFs</div>', unsafe_allow_html=True)
+    cross_issues = []
+    if len(pages_by_gang) > 1:
+        for gang_days in days_by_date.values():
+            if len(gang_days) > 1:
+                cross_issues += check_cross_gang_duplicates(gang_days)
 
-upload_mode = st.radio(
-    "Upload mode",
-    ["By gang", "Combined PDF"],
-    horizontal=True,
-    label_visibility="collapsed",
-)
+    all_flat = [i for r in all_results.values() for _, issues in r for i in issues] + cross_issues
 
-uploaded_files = []
+    gangs = []
+    for gang_label, results in sorted(all_results.items()):
+        files = sorted({d.get("_source_file", "") for d, _ in results if d.get("_source_file")})
+        gangs.append({
+            "label": gang_label,
+            "files": files,
+            "days": [{"day": _to_json(d), "issues": issues} for d, issues in results],
+        })
 
-if upload_mode == "By gang":
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        f = st.file_uploader("Gang 1", type="pdf", key="gang1")
-        if f: uploaded_files.append(f)
-    with c2:
-        f = st.file_uploader("Gang 2", type="pdf", key="gang2")
-        if f: uploaded_files.append(f)
-    with c3:
-        f = st.file_uploader("Gang 3", type="pdf", key="gang3")
-        if f: uploaded_files.append(f)
-else:
-    files = st.file_uploader(
-        "Upload PDF",
-        type="pdf",
-        accept_multiple_files=True,
-        label_visibility="collapsed",
-    )
-    if files:
-        uploaded_files = files
+    return {
+        "summary": {
+            "errors": sum(1 for i in all_flat if i["severity"] == "error"),
+            "warnings": sum(1 for i in all_flat if i["severity"] == "warning"),
+            "gangs": len(pages_by_gang),
+            "days": sum(len(r) for r in all_results.values()),
+        },
+        "gangs": gangs,
+        "cross_gang": cross_issues if len(pages_by_gang) > 1 else None,
+    }
 
-run = st.button("Run Checks →", type="primary", disabled=not uploaded_files)
 
-if not uploaded_files or not run:
-    st.stop()
-
-# ── Parse — collect all pages, infer any missing gang/date from file context ──
-all_pages = []
-with st.spinner("Reading PDFs…"):
-    for pdf_file in uploaded_files:
-        days = parse_pdf(pdf_file)
-        days = infer_missing_fields(days)
-        for d in days:
-            d["_source_file"] = pdf_file.name
-        all_pages.extend(days)
-
-# ── Group by gang (using gang field from page header, not uploader label) ─────
-pages_by_gang = defaultdict(list)
-for d in all_pages:
-    gang_key = f"Gang {d['gang']}" if d.get("gang") else "Gang ?"
-    pages_by_gang[gang_key].append(d)
-
-# Sort each gang's pages by date
-for gang_key in pages_by_gang:
-    pages_by_gang[gang_key].sort(key=lambda d: d.get("date") or date_type.max)
-
-# ── Run checks ────────────────────────────────────────────────────────────────
-all_results = {}
-for gang_key, days in pages_by_gang.items():
-    all_results[gang_key] = [(d, run_day_checks(d)) for d in days]
-
-days_by_date = defaultdict(list)
-for gang_key, days in pages_by_gang.items():
-    for day_data in days:
-        key = day_data.get("date_str") or f"page_{day_data.get('page')}"
-        days_by_date[key].append((gang_key, day_data))
-
-cross_issues = []
-if len(pages_by_gang) > 1:
-    for key, gang_days in days_by_date.items():
-        if len(gang_days) > 1:
-            cross_issues += check_cross_gang_duplicates(gang_days)
-
-all_flat      = [i for r in all_results.values() for _, issues in r for i in issues] + cross_issues
-total_errors  = sum(1 for i in all_flat if i["severity"] == "error")
-total_warns   = sum(1 for i in all_flat if i["severity"] == "warning")
-total_days    = sum(len(r) for r in all_results.values())
-
-# ── Divider ───────────────────────────────────────────────────────────────────
-st.markdown('<hr class="sc-rule">', unsafe_allow_html=True)
-
-# ── Summary ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="sc-label" style="margin-top:44px">Summary</div>', unsafe_allow_html=True)
-
-ec = "col-red"   if total_errors else "col-green"
-wc = "col-amber" if total_warns  else "col-green"
-gangs_str = f"{len(pages_by_gang)} gang{'s' if len(pages_by_gang) > 1 else ''}"
-days_str  = f"{total_days} day{'s' if total_days > 1 else ''}"
-
-st.markdown(f"""
-<div class="sc-metrics">
-    <div class="sc-metric">
-        <div class="sc-metric-val {ec}">{total_errors}</div>
-        <div class="sc-metric-lbl">Errors</div>
-    </div>
-    <div class="sc-metric">
-        <div class="sc-metric-val {wc}">{total_warns}</div>
-        <div class="sc-metric-lbl">Warnings</div>
-    </div>
-    <div class="sc-metric">
-        <div class="sc-metric-val col-white">{total_days}</div>
-        <div class="sc-metric-lbl">{gangs_str} · {days_str} checked</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-if total_errors == 0 and total_warns == 0:
-    st.success("All checks passed across every sheet.")
-
-# ── Per-gang results ──────────────────────────────────────────────────────────
-for gang_label, results in sorted(all_results.items()):
-    source_files = sorted({d.get("_source_file", "") for d, _ in results if d.get("_source_file")})
-    fname = ", ".join(source_files) if source_files else ""
-    st.markdown(f"""
-    <div class="sc-gang">
-        <span class="sc-gang-name">{gang_label}</span>
-        <span class="sc-gang-file">{fname}</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    for day_data, issues in results:
-        errors   = [i for i in issues if i["severity"] == "error"]
-        warnings = [i for i in issues if i["severity"] == "warning"]
-        label    = f"{fmt_day(day_data)}  —  {badge(issues)}"
-
-        with st.expander(label, expanded=bool(issues)):
-            if not issues:
-                st.markdown('<p style="color:#22c55e;font-size:0.875rem;margin:0">No issues found.</p>', unsafe_allow_html=True)
-            else:
-                for issue in errors:
-                    render_issue(issue)
-                for issue in warnings:
-                    render_issue(issue)
-
-            labour = day_data.get("labour", [])
-            plant  = day_data.get("plant",  [])
-            if labour or plant:
-                with st.expander("View parsed data", expanded=False):
-                    d1, d2 = st.columns(2)
-                    with d1:
-                        if labour:
-                            st.markdown("**Labour**")
-                            for e in labour:
-                                st.markdown(f"- {e['name']} | {e.get('trade', '—')} | {e['stated_total']}h")
-                    with d2:
-                        if plant:
-                            st.markdown("**Plant**")
-                            for e in plant:
-                                st.markdown(f"- {e['name']} | {e['stated_total']}h")
-
-# ── Cross-gang ────────────────────────────────────────────────────────────────
-if len(pages_by_gang) > 1:
-    st.markdown("""
-    <div class="sc-gang">
-        <span class="sc-gang-name">Cross-Gang Checks</span>
-    </div>
-    """, unsafe_allow_html=True)
-    if not cross_issues:
-        st.success("No cross-gang duplicates found.")
-    else:
-        for issue in cross_issues:
-            render_issue(issue)
+# Local dev only: on Vercel, public/ is served by the CDN before reaching this app.
+_PUBLIC = os.path.join(os.path.dirname(__file__), "public")
+if os.path.isdir(_PUBLIC):
+    app.mount("/", StaticFiles(directory=_PUBLIC, html=True), name="public")
