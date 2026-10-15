@@ -455,10 +455,18 @@ def check_plant_dropoffs(pages_by_gang, config):
     """
     candidates = _offhire_candidates(config)
 
+    def present(d):
+        # A close misspelling of a known item counts as that item being on the sheet,
+        # so a typo isn't mistaken for an offhire.
+        names = _plant_on(d)
+        for n in names - candidates.keys():
+            names |= set(get_close_matches(n, candidates.keys(), n=1, cutoff=0.8))
+        return names
+
     plant_by_date = {}
     for days in pages_by_gang.values():
         for d in days:
-            plant_by_date.setdefault(d.get("date_str"), set()).update(_plant_on(d))
+            plant_by_date.setdefault(d.get("date_str"), set()).update(present(d))
 
     found = []
     for gang_label, days in pages_by_gang.items():

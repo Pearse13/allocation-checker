@@ -373,17 +373,18 @@ async function postJSON(url, init) {
 
 let lastDays = null;   // parsed pages from the last run, so list edits can re-check without re-uploading
 
-// Spelling corrections accepted via "Yes, I meant X". Applied to the parsed pages before every
+// Spelling corrections accepted via "Yes, I meant X", each for one sheet page only. Applied to the parsed pages before every
 // check this session (the PDFs themselves still need fixing). Key: "labour|name" / "plant|name".
 const corrections = new Map();
+const pageKey = d => `${d._source_file}#${d.page}`;
 
 function applyCorrections(days) {
   if (!corrections.size) return days;
-  const fix = section => e => {
-    const c = corrections.get(`${section}|${e.name.trim().toLowerCase()}`);
+  const fix = (d, section) => e => {
+    const c = corrections.get(`${pageKey(d)}|${section}|${e.name.trim().toLowerCase()}`);
     return c ? { ...e, name: c.to } : e;
   };
-  return days.map(d => ({ ...d, labour: (d.labour || []).map(fix("labour")), plant: (d.plant || []).map(fix("plant")) }));
+  return days.map(d => ({ ...d, labour: (d.labour || []).map(fix(d, "labour")), plant: (d.plant || []).map(fix(d, "plant")) }));
 }
 
 async function runChecks(days) {
@@ -530,12 +531,13 @@ function actionButtons(box, a) {
   }
   const b = el("button", { class: "btn" }, a.type === "add_operative" ? "Add to labour roster" : "Add to known plant");
   b.onclick = () => addForm(box, a);
-  if (!a.suggestion) return [b];
+  if (!a.suggestion || !a.sheet) return [b];
 
   const yes = el("button", { class: "btn primary" }, `Yes, I meant ${a.suggestion}`);
   yes.onclick = async () => {
     const section = a.type === "add_operative" ? "labour" : "plant";
-    corrections.set(`${section}|${a.name.toLowerCase()}`, { section, from: a.name, to: a.suggestion });
+    const where = `${a.sheet.gang ? `Gang ${a.sheet.gang} · ` : ""}${a.sheet.day || `Page ${a.sheet.page}`} ${a.sheet.date_str || ""}`.trim();
+    corrections.set(`${pageKey(a.sheet)}|${section}|${a.name.toLowerCase()}`, { section, from: a.name, to: a.suggestion, where });
     yes.disabled = true;
     toast(`Treating '${a.name}' as '${a.suggestion}'. Fix it on the sheet before sign-off.`);
     await recheck();
@@ -549,7 +551,7 @@ function correctionsNode() {
     undo.onclick = async () => { corrections.delete(key); await recheck(); };
     return el("div", { class: "unseen-row" },
       el("div", { class: "actions", style: "margin-top:0;justify-content:space-between" },
-        el("span", { class: "q" }, `'${c.from}' → `, el("b", {}, c.to)), undo));
+        el("span", { class: "q" }, `'${c.from}' → `, el("b", {}, c.to), el("span", { style: "color:var(--muted)" }, `  ·  ${c.where}`)), undo));
   });
   return el("div", { class: "unseen" },
     el("p", { class: "unseen-note" }, "These spellings are being treated as corrected for this check. Fix them on the sheets before sign-off."),
@@ -557,14 +559,15 @@ function correctionsNode() {
 }
 
 // ── Results ──────────────────────────────────────────────────────────
-function issueNode(i) {
+// `day` is the sheet page the issue belongs to, so a spelling fix only applies to that page.
+function issueNode(i, day) {
   const label = CHECK_LABELS[i.check] || i.check.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const icon = i.severity === "error" ? "❌" : "⚠️";
   const node = el("div", { class: `issue ${i.severity}` },
     el("div", { class: "issue-label" }, `${icon}  ${label}`), i.message);
   if (i.action) {
     const box = el("div", { class: "actions" });
-    box.append(...actionButtons(box, i.action));
+    box.append(...actionButtons(box, { ...i.action, sheet: day }));
     node.append(box);
   }
   return node;
@@ -598,7 +601,7 @@ function dayNode({ day, issues }) {
   const title = `${day.day || `Page ${day.page ?? "?"}`}  ${day.date_str || ""}`.trim();
   const ordered = [...issues.filter(i => i.severity === "error"), ...issues.filter(i => i.severity === "warning")];
   const body = el("div", { class: "day-body" },
-    ordered.length ? ordered.map(issueNode) : el("p", { class: "clear" }, "No issues found."));
+    ordered.length ? ordered.map(i => issueNode(i, day)) : el("p", { class: "clear" }, "No issues found."));
 
   const labour = day.labour || [], plant = day.plant || [];
   if (labour.length || plant.length) {
@@ -644,7 +647,7 @@ function renderResults(r, scroll) {
 
   if (r.cross_gang) {
     out.push(el("div", { class: "gang" }, el("span", { class: "gang-name" }, "Cross-Gang Checks")));
-    out.push(...(r.cross_gang.length ? r.cross_gang.map(issueNode) : [el("div", { class: "success" }, "No cross-gang duplicates found.")]));
+    out.push(...(r.cross_gang.length ? r.cross_gang.map(i => issueNode(i)) : [el("div", { class: "success" }, "No cross-gang duplicates found.")]));
   }
 
   if (r.unseen_plant && r.unseen_plant.length) {
