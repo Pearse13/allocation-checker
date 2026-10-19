@@ -176,11 +176,11 @@
   .btn.primary { background: var(--amber); color: #0a0c14; border-color: var(--amber); }
   .btn.primary:hover:not(:disabled) { background: var(--amber-dk); color: #0a0c14; }
   .btn:disabled { opacity: 0.5; cursor: wait; }
-  .actions input[type=text], .modal input {
+  .actions input[type=text] {
     font: 0.8rem 'Inter', sans-serif; color: var(--text); background: var(--bg);
     border: 1px solid #2f3452; border-radius: 7px; padding: 6px 10px; min-width: 0;
   }
-  .actions input[type=text]:focus, .modal input:focus { outline: none; border-color: var(--amber); }
+  .actions input[type=text]:focus { outline: none; border-color: var(--amber); }
   .actions label.chk { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #cbd5e1; }
   .actions label.chk input { accent-color: var(--amber); }
   .done-note { font-size: 0.78rem; color: #86efac; margin-top: 8px; }
@@ -194,12 +194,6 @@
   .unseen-row .q { font-size: 0.875rem; color: #cbd5e1; }
   .unseen-row .q b { color: var(--text); }
 
-  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
-  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: 340px; max-width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,0.6); }
-  .modal h3 { margin: 0 0 6px; font-size: 0.95rem; }
-  .modal p { margin: 0 0 14px; font-size: 0.8rem; color: var(--muted); }
-  .modal input { width: 100%; padding: 9px 12px; font-size: 0.875rem; }
-  .modal .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
   .toast {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 300;
@@ -228,6 +222,14 @@
   .menu summary .n { color: var(--dim); }
   .menu ul { margin: 0; padding: 0 14px 12px 32px; font-size: 0.8rem; color: #94a3b8; line-height: 1.7; }
   .menu b { color: var(--text); font-weight: 600; }
+  .menu ul.roster { list-style: none; padding-left: 14px; }
+  .roster-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  .roster-row > span { min-width: 0; }
+  .roster-edit { margin: 6px 0; width: 100%; }
+  .roster-edit input { flex: 1 1 120px; font: 0.8rem 'Inter', sans-serif; color: var(--text); background: var(--bg); border: 1px solid #2f3452; border-radius: 7px; padding: 6px 10px; min-width: 0; }
+  .roster-edit input:focus { outline: none; border-color: var(--amber); }
+  .btn.tiny { padding: 3px 9px; font-size: 0.7rem; flex-shrink: 0; }
+  .btn.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
 
   @media (max-width: 760px) {
     :root { --gutter: 16px; }
@@ -426,56 +428,20 @@ runBtn.onclick = async () => {
 };
 
 // ── Editing the known lists ──────────────────────────────────────────
-const PASS_KEY = "sheetcheck-passcode";
-const store = {
-  get() { try { return sessionStorage.getItem(PASS_KEY); } catch { return null; } },
-  set(v) { try { v ? sessionStorage.setItem(PASS_KEY, v) : sessionStorage.removeItem(PASS_KEY); } catch {} },
-};
-
-function askPasscode(wrong) {
-  return new Promise(resolve => {
-    const input = el("input", { type: "password", autocomplete: "current-password", "aria-label": "Passcode" });
-    const close = v => { bg.remove(); resolve(v); };
-    const ok = el("button", { class: "btn primary" }, "Continue");
-    const cancel = el("button", { class: "btn" }, "Cancel");
-    const bg = el("div", { class: "modal-bg" },
-      el("form", { class: "modal" },
-        el("h3", {}, "Enter passcode"),
-        el("p", {}, wrong ? "That passcode wasn't right. Try again." : "Changing the known lists needs the SheetCheck passcode."),
-        input,
-        el("div", { class: "row" }, cancel, ok)));
-    bg.querySelector("form").onsubmit = e => { e.preventDefault(); close(input.value.trim() || null); };
-    cancel.type = "button";
-    cancel.onclick = () => close(null);
-    bg.onclick = e => { if (e.target === bg) close(null); };
-    document.body.append(bg);
-    input.focus();
-  });
-}
-
 function toast(msg) {
   const t = el("div", { class: "toast", role: "status" }, msg);
   document.body.append(t);
   setTimeout(() => t.remove(), 3500);
 }
 
-// Sends one list change, asking for the passcode when needed. Returns the server message, or null if cancelled.
+// Sends one list change. Returns the server message.
 async function updateConfig(body) {
-  let pass = store.get(), wrong = false;
-  for (;;) {
-    if (!pass) pass = await askPasscode(wrong);
-    if (!pass) return null;
-    const res = await fetch("/api/config/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, passcode: pass }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 401) { store.set(null); pass = null; wrong = true; continue; }
-    if (!res.ok) throw new Error(data.detail || `${res.status} ${res.statusText}`);
-    store.set(pass);
-    return data.message;
-  }
+  const data = await postJSON("/api/config/update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return data.message;
 }
 
 // After a list change: re-run checks on the same pages so the results reflect it.
@@ -672,17 +638,72 @@ menuBtn.onclick = e => {
   menuBtn.setAttribute("aria-expanded", String(!menu.hidden));
 };
 document.addEventListener("click", e => {
-  if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); }
+  // Clicks on a toast, or on a menu button that just swapped itself out, shouldn't close the menu mid-edit
+  if (!menu.hidden && e.target.isConnected && !menu.contains(e.target) && !e.target.closest(".toast")) { menu.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); }
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape") { menu.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); } });
 
+// One labour roster row: shows the operative, or an inline form to rename / change trade / remove them.
+function rosterRow(o) {
+  const li = el("li", { class: "roster-row" });
+  const show = () => {
+    const edit = el("button", { class: "btn tiny" }, "Edit");
+    edit.onclick = editForm;
+    li.replaceChildren(el("span", {}, el("b", {}, o.name), ` — ${o.trade}`), edit);
+  };
+  const editForm = () => {
+    const name = el("input", { type: "text", value: o.name, "aria-label": "Name" });
+    const trade = el("input", { type: "text", value: o.trade, placeholder: "Trade", "aria-label": "Trade" });
+    const save = el("button", { class: "btn primary" }, "Save");
+    const cancel = el("button", { class: "btn" }, "Cancel");
+    const remove = el("button", { class: "btn danger" }, "Remove");
+    const box = el("div", { class: "actions roster-edit" }, name, trade, save, cancel, remove);
+    cancel.onclick = show;
+    save.onclick = doUpdate(box, [save, cancel, remove], () =>
+      ({ action: "edit_operative", original_name: o.name, name: name.value, trade: trade.value }));
+    const doRemove = doUpdate(box, [save, cancel, remove], () => ({ action: "remove_operative", name: o.name }));
+    remove.onclick = () => { if (confirm(`Remove ${o.name} from the labour roster?`)) doRemove(); };
+    box.onkeydown = e => { if (e.key === "Enter" && e.target.tagName === "INPUT") save.click(); };
+    li.replaceChildren(box);
+    name.focus();
+  };
+  show();
+  return li;
+}
+
+function addOperativeRow() {
+  const li = el("li", { class: "roster-row" });
+  const show = () => {
+    const add = el("button", { class: "btn tiny" }, "+ Add operative");
+    add.onclick = form;
+    li.replaceChildren(add);
+  };
+  const form = () => {
+    const name = el("input", { type: "text", placeholder: "Name", "aria-label": "Name" });
+    const trade = el("input", { type: "text", placeholder: "Trade", "aria-label": "Trade" });
+    const save = el("button", { class: "btn primary" }, "Add");
+    const cancel = el("button", { class: "btn" }, "Cancel");
+    const box = el("div", { class: "actions roster-edit" }, name, trade, save, cancel);
+    cancel.onclick = show;
+    save.onclick = doUpdate(box, [save, cancel], () => ({ action: "add_operative", name: name.value, trade: trade.value }));
+    box.onkeydown = e => { if (e.key === "Enter" && e.target.tagName === "INPUT") save.click(); };
+    li.replaceChildren(box);
+    name.focus();
+  };
+  show();
+  return li;
+}
+
 const loadMenu = () => fetch("/api/config").then(r => r.json()).then(cfg => {
-  const section = (title, items) => el("details", {},
+  const body = document.getElementById("menuBody");
+  const wasOpen = new Set([...body.querySelectorAll("details[open]")].map(d => d.dataset.key));
+  const section = (title, items, rows) => el("details", { "data-key": title, open: wasOpen.has(title) },
     el("summary", {}, title, el("span", { class: "n" }, `  ·  ${items.length}`)),
-    el("ul", {}, items.map(i => el("li", {}, i))));
-  document.getElementById("menuBody").replaceChildren(
+    el("ul", rows ? { class: "roster" } : {}, rows || items.map(i => el("li", {}, i))));
+  const ops = cfg.known_operatives || [];
+  body.replaceChildren(
     section("Prelim Operatives", Object.keys(cfg.prelim_operatives || {})),
-    section("Labour Roster", (cfg.known_operatives || []).map(o => [el("b", {}, o.name), ` — ${o.trade}`])),
+    section("Labour Roster", ops, [...ops.map(rosterRow), addOperativeRow()]),
     section("Prelim Plant", cfg.prelim_plant || []),
     section("Required Plant", (cfg.required_plant_groups || []).map(g => [el("b", {}, g.label), ` — ${g.variants.join(" / ")}`])),
     section("Known Plant", cfg.known_plant || []));

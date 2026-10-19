@@ -5,7 +5,6 @@ The static front end lives in public/ (served by Vercel's CDN). It uploads
 each PDF to /api/parse, then posts every parsed page to /api/check so the
 cross-gang checks can see all gangs at once.
 """
-import hmac
 import io
 import os
 from collections import defaultdict
@@ -53,17 +52,13 @@ def _remove(items, name):
 @app.post("/api/config/update")
 def update_config(payload: dict):
     """
-    Add to or remove from the known lists. Requires the SHEETCHECK_PASSCODE.
+    Add to, edit or remove from the known lists. Open to anyone with the link (no passcode).
       {"action": "add_operative", "name": ..., "trade": ...}
+      {"action": "edit_operative", "original_name": ..., "name": ..., "trade": ...}
+      {"action": "remove_operative", "name": ...}
       {"action": "add_plant", "name": ..., "vehicle": bool}
       {"action": "offhire", "name": ...}
     """
-    expected = os.environ.get("SHEETCHECK_PASSCODE")
-    if not expected:
-        raise HTTPException(status_code=503, detail="Editing is not set up yet (no passcode configured).")
-    if not hmac.compare_digest(str(payload.get("passcode", "")), expected):
-        raise HTTPException(status_code=401, detail="Wrong passcode.")
-
     action = payload.get("action")
     name = str(payload.get("name", "")).strip()
     if not name:
@@ -77,6 +72,28 @@ def update_config(payload: dict):
         ops = [o for o in config.get("known_operatives", []) if o["name"].strip().lower() != name.lower()]
         config["known_operatives"] = ops + [{"name": name, "trade": trade}]
         message = f"Added {name} ({trade}) to the labour roster."
+    elif action == "edit_operative":
+        original = str(payload.get("original_name", "")).strip().lower()
+        trade = str(payload.get("trade", "")).strip()
+        if not trade:
+            raise HTTPException(status_code=400, detail="Trade is required.")
+        ops = config.get("known_operatives", [])
+        idx = next((i for i, o in enumerate(ops) if o["name"].strip().lower() == original), None)
+        if idx is None:
+            raise HTTPException(status_code=404, detail="That operative isn't on the labour roster any more.")
+        if any(i != idx and o["name"].strip().lower() == name.lower() for i, o in enumerate(ops)):
+            raise HTTPException(status_code=400, detail=f"{name} is already on the labour roster.")
+        old = ops[idx]
+        ops[idx] = {**old, "name": name, "trade": trade}
+        config["known_operatives"] = ops
+        message = f"Updated {old['name']} → {name} ({trade})." if old["name"] != name else f"Updated {name} ({trade})."
+    elif action == "remove_operative":
+        ops = config.get("known_operatives", [])
+        kept = [o for o in ops if o["name"].strip().lower() != name.lower()]
+        if len(kept) == len(ops):
+            raise HTTPException(status_code=404, detail="That operative isn't on the labour roster any more.")
+        config["known_operatives"] = kept
+        message = f"Removed {name} from the labour roster."
     elif action == "add_plant":
         config["known_plant"] = _remove(config.get("known_plant", []), name) + [name]
         if payload.get("vehicle"):

@@ -10,7 +10,7 @@ Every push to `main` on GitHub (Pearse13/allocation-checker) auto-deploys to pro
   - `POST /api/parse`: one PDF in, parsed pages out (dates as ISO strings).
   - `POST /api/check`: all parsed pages in. Groups them by gang (from the page header, not the uploader slot), runs per-day, cross-gang and offhire checks, and returns summary, gangs, cross_gang and unseen_plant.
   - `GET /api/config`: the current known lists.
-  - `POST /api/config/update`: `add_operative`, `add_plant` or `offhire`. Needs `SHEETCHECK_PASSCODE`.
+  - `POST /api/config/update`: `add_operative`, `edit_operative` (rename or change trade), `remove_operative`, `add_plant` or `offhire`. No passcode: anyone with the link can edit the lists.
   - It also mounts `public/` as static files, but only for local dev. On Vercel the CDN serves `public/`.
 - `parser.py`: pdfplumber table extraction for the fixed 19-column Excel template, plus `infer_missing_fields` for gang and date.
 - `checks.py`: every check. Each one takes `config` as an argument (loaded once per request). Issues are dicts like `{severity, check, message, day, gang, action}`. `action` tells the UI which button to show (`add_operative`, `add_plant` with an optional `suggestion`, or `offhire`).
@@ -38,11 +38,11 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt uvicorn
 ```
 
 ```bash
-env $(cat .env.local) .venv/bin/uvicorn app:app --port 8000
+.venv/bin/uvicorn app:app --port 8000
 ```
 
-`.env.local` (gitignored) holds a test `SHEETCHECK_PASSCODE`. Sample sheets are in `~/Downloads/21.09 - 23.09 *Gang*.pdf`. Running all three should give 6 errors, 4 warnings and 3 cross-gang duplicates with the seed config. Don't commit PDFs (they're gitignored).
+Sample sheets are in `~/Downloads/21.09 - 23.09 *Gang*.pdf`. Running all three should give 6 errors, 4 warnings and 3 cross-gang duplicates with the seed config. Don't commit PDFs (they're gitignored).
 
 ## Deploying
 
-Push to `main`. Env vars are managed in Vercel (`vercel env ls`). `SHEETCHECK_PASSCODE` is set by the user; never put it in code or chat. After changing an env var, redeploy with `vercel deploy --prod`.
+Push to `main`. Env vars are managed in Vercel (`vercel env ls`). After changing an env var, redeploy with `vercel deploy --prod`.
