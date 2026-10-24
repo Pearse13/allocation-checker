@@ -228,6 +228,8 @@
   .roster-edit { margin: 6px 0; width: 100%; }
   .roster-edit input { flex: 1 1 120px; font: 0.8rem 'Inter', sans-serif; color: var(--text); background: var(--bg); border: 1px solid #2f3452; border-radius: 7px; padding: 6px 10px; min-width: 0; }
   .roster-edit input:focus { outline: none; border-color: var(--amber); }
+  .roster-edit .date-field { display: flex; align-items: center; gap: 6px; flex: 1 1 150px; font-size: 0.7rem; color: var(--muted); }
+  .roster-edit input[type=date] { color-scheme: dark; }
   .btn.tiny { padding: 3px 9px; font-size: 0.7rem; flex-shrink: 0; }
   .btn.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
 
@@ -694,6 +696,59 @@ function addOperativeRow() {
   return li;
 }
 
+// One prelim operative row (site management on every sheet). Optional from/until dates limit
+// which sheets they must appear on, so a replacement doesn't flag older or newer sheets.
+const ukDate = iso => iso ? iso.split("-").reverse().join("/") : "";
+function prelimForm(li, p, onCancel) {
+  const name = el("input", { type: "text", value: p ? p.name : "", placeholder: "Name", "aria-label": "Name" });
+  const trade = el("input", { type: "text", value: p ? p.trade : "", placeholder: "Trade", "aria-label": "Trade" });
+  const from = el("input", { type: "date", value: p ? p.from : "", "aria-label": "On sheets from (optional)", title: "On sheets from (optional)" });
+  const until = el("input", { type: "date", value: p ? p.until : "", "aria-label": "On sheets until (optional)", title: "On sheets until (optional)" });
+  const save = el("button", { class: "btn primary" }, p ? "Save" : "Add");
+  const cancel = el("button", { class: "btn" }, "Cancel");
+  const buttons = [save, cancel];
+  const box = el("div", { class: "actions roster-edit" }, name, trade,
+    el("label", { class: "date-field" }, "From", from), el("label", { class: "date-field" }, "Until", until), save, cancel);
+  cancel.onclick = onCancel;
+  save.onclick = doUpdate(box, buttons, () => p
+    ? { action: "edit_prelim", original_name: p.name, name: name.value, trade: trade.value, from: from.value, until: until.value }
+    : { action: "add_prelim", name: name.value, trade: trade.value, from: from.value, until: until.value });
+  if (p) {
+    const remove = el("button", { class: "btn danger" }, "Remove");
+    buttons.push(remove);
+    box.append(remove);
+    const doRemove = doUpdate(box, buttons, () => ({ action: "remove_prelim", name: p.name }));
+    remove.onclick = () => { if (confirm(`Remove ${p.name} from the prelim operatives?`)) doRemove(); };
+  }
+  box.onkeydown = e => { if (e.key === "Enter" && e.target.tagName === "INPUT") save.click(); };
+  li.replaceChildren(box);
+  name.focus();
+}
+
+function prelimRow(p) {
+  const li = el("li", { class: "roster-row" });
+  const show = () => {
+    const edit = el("button", { class: "btn tiny" }, "Edit");
+    edit.onclick = () => prelimForm(li, p, show);
+    const range = [p.from && `from ${ukDate(p.from)}`, p.until && `until ${ukDate(p.until)}`].filter(Boolean).join(" ");
+    li.replaceChildren(el("span", {}, el("b", {}, p.name), p.trade ? ` — ${p.trade}` : "",
+      range ? el("span", { class: "n" }, `  ·  ${range}`) : ""), edit);
+  };
+  show();
+  return li;
+}
+
+function addPrelimRow() {
+  const li = el("li", { class: "roster-row" });
+  const show = () => {
+    const add = el("button", { class: "btn tiny" }, "+ Add prelim operative");
+    add.onclick = () => prelimForm(li, null, show);
+    li.replaceChildren(add);
+  };
+  show();
+  return li;
+}
+
 const loadMenu = () => fetch("/api/config").then(r => r.json()).then(cfg => {
   const body = document.getElementById("menuBody");
   const wasOpen = new Set([...body.querySelectorAll("details[open]")].map(d => d.dataset.key));
@@ -701,8 +756,10 @@ const loadMenu = () => fetch("/api/config").then(r => r.json()).then(cfg => {
     el("summary", {}, title, el("span", { class: "n" }, `  ·  ${items.length}`)),
     el("ul", rows ? { class: "roster" } : {}, rows || items.map(i => el("li", {}, i))));
   const ops = cfg.known_operatives || [];
+  const prelims = Object.entries(cfg.prelim_operatives || {}).map(([name, r]) =>
+    ({ name, trade: r.trade || "", from: r.from || "", until: r.until || "" }));
   body.replaceChildren(
-    section("Prelim Operatives", Object.keys(cfg.prelim_operatives || {})),
+    section("Prelim Operatives", prelims, [...prelims.map(prelimRow), addPrelimRow()]),
     section("Labour Roster", ops, [...ops.map(rosterRow), addOperativeRow()]),
     section("Prelim Plant", cfg.prelim_plant || []),
     section("Required Plant", (cfg.required_plant_groups || []).map(g => [el("b", {}, g.label), ` — ${g.variants.join(" / ")}`])),

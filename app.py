@@ -49,6 +49,17 @@ def _remove(items, name):
     return [i for i in items if i.strip().lower() != key]
 
 
+def _iso_or_blank(value):
+    """A blank or YYYY-MM-DD date from the browser, as an ISO string ('' if blank)."""
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    try:
+        return date_type.fromisoformat(value).isoformat()
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"'{value}' isn't a valid date.")
+
+
 @app.post("/api/config/update")
 def update_config(payload: dict):
     """
@@ -56,6 +67,9 @@ def update_config(payload: dict):
       {"action": "add_operative", "name": ..., "trade": ...}
       {"action": "edit_operative", "original_name": ..., "name": ..., "trade": ...}
       {"action": "remove_operative", "name": ...}
+      {"action": "add_prelim", "name": ..., "trade": ..., "from": "YYYY-MM-DD"?, "until": "YYYY-MM-DD"?}
+      {"action": "edit_prelim", "original_name": ..., "name": ..., "trade": ..., "from": ..., "until": ...}
+      {"action": "remove_prelim", "name": ...}
       {"action": "add_plant", "name": ..., "vehicle": bool}
       {"action": "offhire", "name": ...}
     """
@@ -94,6 +108,43 @@ def update_config(payload: dict):
             raise HTTPException(status_code=404, detail="That operative isn't on the labour roster any more.")
         config["known_operatives"] = kept
         message = f"Removed {name} from the labour roster."
+    elif action in ("add_prelim", "edit_prelim"):
+        trade = str(payload.get("trade", "")).strip()
+        if not trade:
+            raise HTTPException(status_code=400, detail="Trade is required.")
+        start, until = _iso_or_blank(payload.get("from")), _iso_or_blank(payload.get("until"))
+        if start and until and until < start:
+            raise HTTPException(status_code=400, detail="The 'until' date is before the 'from' date.")
+        prelims = config.get("prelim_operatives", {})
+        original = str(payload.get("original_name", name)).strip().lower() if action == "edit_prelim" else None
+        old_key = next((k for k in prelims if k.strip().lower() == original), None) if original else None
+        if action == "edit_prelim" and old_key is None:
+            raise HTTPException(status_code=404, detail="That prelim operative isn't on the list any more.")
+        if any(k.strip().lower() == name.lower() and k != old_key for k in prelims):
+            raise HTTPException(status_code=400, detail=f"{name} is already a prelim operative.")
+        rules = dict(prelims.get(old_key, {})) if old_key else {}
+        rules["trade"] = trade
+        rules.setdefault("expected_job_hours", {"1": 0.5, "2": 10.0})
+        for field, value in (("from", start), ("until", until)):
+            if value:
+                rules[field] = value
+            else:
+                rules.pop(field, None)
+        # Rebuild in order so an edited entry keeps its place in the list
+        new = {}
+        for k, v in prelims.items():
+            new[name if k == old_key else k] = rules if k == old_key else v
+        if old_key is None:
+            new[name] = rules
+        config["prelim_operatives"] = new
+        message = f"Added {name} ({trade}) as a prelim operative." if action == "add_prelim" else f"Updated prelim operative {name} ({trade})."
+    elif action == "remove_prelim":
+        prelims = config.get("prelim_operatives", {})
+        kept = {k: v for k, v in prelims.items() if k.strip().lower() != name.lower()}
+        if len(kept) == len(prelims):
+            raise HTTPException(status_code=404, detail="That prelim operative isn't on the list any more.")
+        config["prelim_operatives"] = kept
+        message = f"Removed {name} from the prelim operatives."
     elif action == "add_plant":
         config["known_plant"] = _remove(config.get("known_plant", []), name) + [name]
         if payload.get("vehicle"):

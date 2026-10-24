@@ -108,7 +108,8 @@ def check_times(day_data):
 
 def check_prelim_operatives(day_data, config):
     """
-    Peter Giblin and Mick Kilcoyne (prelim operatives) must always have:
+    Prelim operatives (site management) must be on every sheet dated within their
+    optional from/until dates, and must always have:
       - Job 1 = 0.5 (daily briefing)
       - Job 2 = 10.0 (supervision duties)
       - Nothing else
@@ -129,6 +130,13 @@ def check_prelim_operatives(day_data, config):
         expected = rules.get("expected_job_hours", {})  # {"1": 0.5, "2": 10.0}
 
         if key not in labour_by_name:
+            # Only required on sheets dated while they're on site (optional from/until dates)
+            sheet_date = day_data.get("date")
+            if sheet_date and (
+                (rules.get("from") and sheet_date.isoformat() < rules["from"])
+                or (rules.get("until") and sheet_date.isoformat() > rules["until"])
+            ):
+                continue
             issues.append(_issue(
                 "error", "prelim_operative",
                 f"Prelim — {prelim_name} is missing from this sheet. They should appear on every gang every day.",
@@ -138,6 +146,16 @@ def check_prelim_operatives(day_data, config):
 
         entry = labour_by_name[key]
         job_hours = entry["job_hours"]  # list indexed 0-9 = job columns 1-10
+
+        # Left on a sheet copied from an older one?
+        sheet_date = day_data.get("date")
+        if sheet_date and rules.get("until") and sheet_date.isoformat() > rules["until"]:
+            until = datetime.strptime(rules["until"], "%Y-%m-%d").strftime("%d/%m/%Y")
+            issues.append(_issue(
+                "warning", "prelim_operative",
+                f"Prelim — {prelim_name} is on this sheet, but they're only on sheets until {until}. Should they be removed?",
+                day=label, gang=gang
+            ))
 
         for job_num_str, expected_hrs in expected.items():
             col_idx = int(job_num_str) - 1  # job "1" is index 0

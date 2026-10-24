@@ -10,7 +10,7 @@ Every push to `main` on GitHub (Pearse13/allocation-checker) auto-deploys to pro
   - `POST /api/parse`: one PDF in, parsed pages out (dates as ISO strings).
   - `POST /api/check`: all parsed pages in. Groups them by gang (from the page header, not the uploader slot), runs per-day, cross-gang and offhire checks, and returns summary, gangs, cross_gang and unseen_plant.
   - `GET /api/config`: the current known lists.
-  - `POST /api/config/update`: `add_operative`, `edit_operative` (rename or change trade), `remove_operative`, `add_plant` or `offhire`. No passcode: anyone with the link can edit the lists.
+  - `POST /api/config/update`: `add_operative`, `edit_operative` (rename or change trade), `remove_operative`, `add_prelim` / `edit_prelim` (name, trade, optional `from`/`until` ISO dates), `remove_prelim`, `add_plant` or `offhire`. No passcode: anyone with the link can edit the lists.
   - It also mounts `public/` as static files, but only for local dev. On Vercel the CDN serves `public/`.
 - `parser.py`: pdfplumber table extraction for the fixed 19-column Excel template, plus `infer_missing_fields` for gang and date.
 - `checks.py`: every check. Each one takes `config` as an argument (loaded once per request). Issues are dicts like `{severity, check, message, day, gang, action}`. `action` tells the UI which button to show (`add_operative`, `add_plant` with an optional `suggestion`, or `offhire`).
@@ -21,6 +21,7 @@ Every push to `main` on GitHub (Pearse13/allocation-checker) auto-deploys to pro
 ## Behaviour worth knowing
 
 - Expected hours per row are 10.5. Start and finish times must be 0800 and 1800. Prelim operatives must have Job 1 = 0.5 and Job 2 = 10.
+- Prelim operatives (site management, e.g. the works manager and foreman) can have optional `from`/`until` dates. They're only required on sheets dated in that range, and one found on a sheet after their `until` date gets a warning. This handles a replacement, e.g. Peter Giblin → Wayne Marriott, without flagging older or newer sheets.
 - The cross-gang duplicate check only covers `vehicle_plant`; prelim operatives and plant are exempt.
 - **Offhire prompts** ("Has this been offhired? Is this gone?") come up in two cases:
   - Known plant on a gang's sheet one day and gone the next (unless it moved to another gang that day).
